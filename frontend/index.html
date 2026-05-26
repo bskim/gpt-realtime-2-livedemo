@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice CS × GPT-Realtime-2 Demo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ════════════════════════════════════
+     HEADER
+════════════════════════════════════ -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">Voice CS<span> × GPT-Realtime-2</span></div>
+    <div class="path-indicator" id="pathIndicator">
+      <span class="pi-dot"></span>
+      <span id="pathLabel">대기 중</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="status-chip" id="statusChip">disconnected</span>
+    <button class="btn btn-connect" id="btnConnect">연결</button>
+    <button class="btn btn-record"  id="btnRecord"  disabled>● REC</button>
+    <button class="btn btn-stop"    id="btnStop"    disabled>■ STOP</button>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════
+     MAIN 3-PANEL
+════════════════════════════════════ -->
+<main class="main">
+
+  <!-- ── LEFT: Demo Control ── -->
+  <section class="panel demo-panel">
+    <div class="panel-header">데모 제어</div>
+    <div class="demo-body">
+
+      <!-- Scenario presets -->
+      <div class="demo-section">
+        <div class="demo-label">시나리오 프리셋</div>
+        <div class="preset-grid">
+          <button class="preset-btn" data-preset="S1">
+            <span class="preset-tag">S1</span>단순 FAQ
+          </button>
+          <button class="preset-btn" data-preset="S2">
+            <span class="preset-tag">S2</span>복합 의도
+          </button>
+          <button class="preset-btn" data-preset="S3">
+            <span class="preset-tag">S3</span>불만 고객
+          </button>
+          <button class="preset-btn" data-preset="S4">
+            <span class="preset-tag">S4</span>모호 요청
+          </button>
+        </div>
+      </div>
+
+      <!-- Workflow simulation -->
+      <div class="demo-section">
+        <div class="demo-label">Workflow 시뮬레이션 (전환 전)</div>
+        <div class="workflow-sim">
+          <div class="workflow-sim-header">
+            Workflow 처리
+            <span class="workflow-badge ok" id="workflowBadge">처리됨</span>
+          </div>
+          <div class="workflow-messages" id="workflowMessages">
+            <div class="workflow-msg bot">안녕하세요, 무엇을 도와드릴까요?</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transfer visualization -->
+      <div class="transfer-viz" id="transferViz">
+        <div class="workflow-sim-header">
+          자동화 미처리 → RT-2 전환
+          <span class="workflow-badge failed">Fallback</span>
+        </div>
+        <div class="transfer-flow">
+          <div class="tf-node workflow">STT + LLM + TTS (Workflow)</div>
+          <div class="tf-arrow">↓ RT-2 전환</div>
+          <div class="tf-node rt2 active" id="rt2Node">GPT-Realtime-2 E2E</div>
+        </div>
+        <div class="tf-ctx" id="tfCtx"></div>
+      </div>
+
+      <!-- Manual controls -->
+      <div class="demo-section">
+        <div class="demo-label">고객 등급</div>
+        <div class="toggle-row" id="tierRow">
+          <button class="toggle-btn active" data-field="customer_tier" data-val="regular">일반</button>
+          <button class="toggle-btn" data-field="customer_tier" data-val="vip">VIP</button>
+          <button class="toggle-btn" data-field="customer_tier" data-val="problem">불만</button>
+          <button class="toggle-btn" data-field="customer_tier" data-val="urgent">긴급</button>
+        </div>
+      </div>
+
+      <div class="demo-section">
+        <div class="demo-label">주문 상태</div>
+        <div class="toggle-row" id="orderRow">
+          <button class="toggle-btn active" data-field="order_status" data-val="normal">정상</button>
+          <button class="toggle-btn" data-field="order_status" data-val="delayed">지연</button>
+          <button class="toggle-btn" data-field="order_status" data-val="lost">분실</button>
+          <button class="toggle-btn" data-field="order_status" data-val="refund_requested">환불요청</button>
+        </div>
+      </div>
+
+      <div class="demo-section">
+        <div class="demo-label">문의 유형</div>
+        <div class="toggle-row" id="inquiryRow">
+          <button class="toggle-btn active" data-field="inquiry_type" data-val="simple">단순</button>
+          <button class="toggle-btn" data-field="inquiry_type" data-val="complex">복합</button>
+          <button class="toggle-btn" data-field="inquiry_type" data-val="emotional">감정</button>
+          <button class="toggle-btn" data-field="inquiry_type" data-val="ambiguous">모호</button>
+        </div>
+      </div>
+
+      <div class="demo-section">
+        <div class="demo-label">고객 ID</div>
+        <input class="demo-input" id="customerIdInput" type="text" value="CUST-001" placeholder="고객 코드">
+      </div>
+
+      <div class="demo-section">
+        <div class="toggle-row">
+          <button class="toggle-btn" data-field="has_coupon" data-val="true" id="couponBtn">쿠폰 보유</button>
+          <button class="toggle-btn" data-field="workflow_resolved" data-val="false" id="workflowFailBtn">Workflow 미처리</button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── MIDDLE: Chat + Waveform ── -->
+  <section class="panel chat-panel">
+    <div class="panel-header">실시간 대화</div>
+
+    <div class="waveform-area">
+      <div class="waveform-col">
+        <div class="waveform-lbl">입력 (마이크)</div>
+        <canvas class="waveform" id="canvasInput"></canvas>
+      </div>
+      <div class="waveform-col">
+        <div class="waveform-lbl">출력 (AI 응답)</div>
+        <canvas class="waveform" id="canvasOutput"></canvas>
+      </div>
+    </div>
+
+    <div class="messages" id="messages">
+      <!-- Transfer banner (shown when fallback is active) -->
+      <div class="transfer-banner" id="transferBanner">
+        <span class="tb-icon">🔄</span>
+        <span>Workflow 미처리 — GPT-Realtime-2 E2E 세션으로 전환됨</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── RIGHT: Architecture / Agent / Tool Log ── -->
+  <section class="panel log-panel">
+    <div class="panel-header">아키텍처 / 에이전트 / Tool</div>
+    <div class="log-body" id="logBody">
+
+      <!-- Hybrid architecture diagram -->
+      <div class="arch-diagram">
+        <div class="arch-row" id="archPrimary">
+          <span class="arch-dot"></span>
+          <span class="arch-label">Primary Path (STT+LLM+TTS)</span>
+          <span class="arch-pct">~80%</span>
+        </div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-row" id="archRt2">
+          <span class="arch-dot"></span>
+          <span class="arch-label">RT-2 Fallback (E2E Voice)</span>
+          <span class="arch-pct">~20%</span>
+        </div>
+      </div>
+
+      <!-- Current agent -->
+      <div class="current-agent-card" id="currentAgentCard">
+        <span class="ca-dot" id="caDot"></span>
+        <span class="ca-label" id="caLabel">대기 중</span>
+        <span class="ca-sub" id="caSub"></span>
+      </div>
+
+      <!-- Dynamic log entries injected here -->
+
+    </div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

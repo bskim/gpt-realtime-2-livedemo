@@ -1,0 +1,28 @@
+name: gpt-realtime-2-livedemo
+metadata:
+  template: gpt-realtime-2-livedemo
+
+# Hooks run both sh and pwsh variants.
+# On Windows: sh hook fails silently, pwsh succeeds.
+# On Linux/Mac: pwsh hook fails silently (unless pwsh installed), sh succeeds.
+# At least one must succeed per platform.
+hooks:
+  preprovision:
+    - shell: sh
+      run: scripts/load_python_env.sh
+      interactive: false
+      continueOnError: true
+    - shell: pwsh
+      run: scripts/load_python_env.ps1
+      interactive: false
+      continueOnError: true
+
+  postprovision:
+    - shell: sh
+      run: scripts/write_env.sh
+      interactive: false
+      continueOnError: true
+    - shell: pwsh
+      run: scripts/write_env.ps1
+      interactive: false
+      continueOnError: true

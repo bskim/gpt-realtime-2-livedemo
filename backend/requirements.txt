@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+websockets
+aiohttp
+python-dotenv
+azure-identity
+numpy
