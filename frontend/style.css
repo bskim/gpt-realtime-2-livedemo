@@ -273,6 +273,48 @@ body {
 }
 .demo-input:focus { outline: none; border-color: var(--accent); }
 
+.voice-row { display: flex; gap: 6px; align-items: center; }
+.voice-speed-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.voice-speed-label {
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 38px;
+}
+.voice-speed-range {
+  flex: 1;
+}
+.voice-speed-value {
+  font-size: 11px;
+  color: var(--text);
+  min-width: 42px;
+  text-align: right;
+}
+.demo-select {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 9px;
+  color: var(--text);
+  font-size: 12px;
+}
+.demo-select:focus { outline: none; border-color: var(--accent); }
+.btn-sm {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-sm:hover { opacity: 0.85; }
+
 /* ═══════════════════════════════════════
    MIDDLE PANEL: Chat + Waveform
 ═══════════════════════════════════════ */
@@ -337,6 +379,37 @@ canvas.waveform { width: 100%; height: 36px; border-radius: 4px; background: rgb
 
 .msg-text.streaming::after { content: "▍"; animation: blink 0.6s infinite; }
 @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0;} }
+
+/* Inline tool call / agent switch indicators in chat */
+.msg-tool, .msg-tool-result, .msg-agent-switch {
+  align-self: center;
+  max-width: 90%;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.msg-tool {
+  background: rgba(227,179,65,0.1);
+  border: 1px solid rgba(227,179,65,0.25);
+  color: var(--orange);
+}
+.msg-tool-result {
+  background: rgba(63,185,80,0.1);
+  border: 1px solid rgba(63,185,80,0.25);
+  color: var(--green);
+}
+.msg-agent-switch {
+  background: rgba(88,166,255,0.08);
+  border: 1px solid rgba(88,166,255,0.2);
+  color: var(--accent);
+}
+.tool-icon { font-size: 13px; flex-shrink: 0; }
+.tool-inline-name { font-family: monospace; }
+.tool-inline-result { font-size: 10px; font-weight: 400; color: var(--muted); }
 
 /* ═══════════════════════════════════════
    RIGHT PANEL: Agent / Tool Log

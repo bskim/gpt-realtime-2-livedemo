@@ -20,6 +20,25 @@ logger = logging.getLogger(__name__)
 
 AUDIO_SAMPLE_RATE = 24000  # gpt-realtime-2: PCM16 24 kHz
 
+END_SESSION_PATTERNS = [
+    r"감사(합니다|해요|해)",
+    r"이제\s*됐(어요|습니다)",
+    r"괜찮(아요|습니다)",
+    r"더\s*상담\s*(필요\s*없|안\s*해)",
+    r"그만\s*할게",
+    r"종료\s*할게",
+    r"여기까지\s*할게",
+    r"연락\s*기다리겠습니다",
+    r"기다릴게요",
+    r"확인해\s*보고.*다시\s*연락드릴게요",
+    r"문제\s*있으면.*다시\s*연락드릴게요",
+    r"알겠습니다.*다시\s*연락드릴게요",
+    r"수고\s*하세요",
+    r"고맙습니다",
+]
+
+FORCED_CLOSING_LINE = "문의 주셔서 감사합니다. 상담을 마무리하겠습니다."
+
 
 # ---------------------------------------------------------------------------
 # Audio helpers
@@ -108,9 +127,16 @@ class RealtimeAPI(RealtimeEventHandler):
     async def _receive_messages(self) -> None:
         async for message in self.ws:
             event = json.loads(message)
-            if event["type"] == "error":
+            evt_type = event["type"]
+            if evt_type == "error":
                 logger.error(f"Realtime API error: {message}")
-            self.dispatch(f"server.{event['type']}", event)
+            elif evt_type.startswith("response."):
+                logger.info(f"<< {evt_type}")
+            elif evt_type == "session.created" or evt_type == "session.updated":
+                logger.info(f"<< {evt_type}: {json.dumps(event.get('session', {}), ensure_ascii=False)[:500]}")
+            else:
+                logger.info(f"<< {evt_type}")
+            self.dispatch(f"server.{evt_type}", event)
             self.dispatch("server.*", event)
 
     async def send(self, event_name: str, data: dict = None) -> None:
@@ -118,6 +144,8 @@ class RealtimeAPI(RealtimeEventHandler):
             raise RuntimeError("RealtimeAPI is not connected")
         data = data or {}
         event = {"event_id": self._gen_id("evt_"), "type": event_name, **data}
+        if event_name != "input_audio_buffer.append":
+            logger.info(f">> {event_name}: {json.dumps(data, ensure_ascii=False)[:300]}")
         self.dispatch(f"client.{event_name}", event)
         self.dispatch("client.*", event)
         await self.ws.send(json.dumps(event))
@@ -139,7 +167,7 @@ class RealtimeConversation:
     default_frequency = AUDIO_SAMPLE_RATE
 
     EventProcessors = {
-        "conversation.item.created": lambda s, e: s._on_item_created(e),
+        "conversation.item.added": lambda s, e: s._on_item_created(e),
         "conversation.item.truncated": lambda s, e: s._on_item_truncated(e),
         "conversation.item.deleted": lambda s, e: s._on_item_deleted(e),
         "conversation.item.input_audio_transcription.completed": lambda s, e: s._on_transcription_completed(e),
@@ -149,8 +177,8 @@ class RealtimeConversation:
         "response.output_item.added": lambda s, e: s._on_output_item_added(e),
         "response.output_item.done": lambda s, e: s._on_output_item_done(e),
         "response.content_part.added": lambda s, e: s._on_content_part_added(e),
-        "response.audio_transcript.delta": lambda s, e: s._on_audio_transcript_delta(e),
-        "response.audio.delta": lambda s, e: s._on_audio_delta(e),
+        "response.output_audio_transcript.delta": lambda s, e: s._on_audio_transcript_delta(e),
+        "response.output_audio.delta": lambda s, e: s._on_audio_delta(e),
         "response.text.delta": lambda s, e: s._on_text_delta(e),
         "response.function_call_arguments.delta": lambda s, e: s._on_fn_args_delta(e),
     }
@@ -325,6 +353,14 @@ class RealtimeClient(RealtimeEventHandler):
         self.assistant = assistant
         self._send_callback = send_callback
         self.current_agent: str = "root"
+        self.session_preamble: str = ""
+        self.last_user_transcript: str = ""
+        self.user_requested_human_followup: bool = False
+        self.pending_auto_end: bool = False
+        self.suppress_next_auto_response_for_close: bool = False
+        self.cancelling_for_forced_closing: bool = False
+        self.awaiting_forced_closing: bool = False
+        self.forced_closing_line: str = FORCED_CLOSING_LINE
 
         # gpt-realtime-2 session config: nested audio.input / audio.output structure
         self.default_session_config = {
@@ -332,29 +368,26 @@ class RealtimeClient(RealtimeEventHandler):
             "output_modalities": ["audio"],
             "audio": {
                 "input": {
-                    "transcription": {"model": "whisper-1"},
-                    "format": {"type": "audio/pcm", "rate": AUDIO_SAMPLE_RATE},
+                    "transcription": {"model": "whisper-1", "language": "ko"},
                     "turn_detection": {
                         "type": "server_vad",
-                        "threshold": 0.5,
-                        "prefix_padding_ms": 300,
-                        "silence_duration_ms": 500,
+                        "threshold": 0.9,
+                        "prefix_padding_ms": 400,
+                        "silence_duration_ms": 1000,
                         "create_response": True,
-                        "interrupt_response": False,
                     },
                 },
                 "output": {
-                    "voice": "alloy",
-                    "format": {"type": "audio/pcm", "rate": AUDIO_SAMPLE_RATE},
+                    "voice": "sage",
+                    "speed": 1.05,
                 },
             },
             "tools": [],
             "tool_choice": "auto",
-            "temperature": 0.8,
-            "max_response_output_tokens": 4096,
         }
         self.session_config: dict = {}
         self.session_created: bool = False
+        self.session_updated: bool = False
         self.input_audio_buffer = bytearray()
 
         self.realtime = RealtimeAPI()
@@ -366,8 +399,15 @@ class RealtimeClient(RealtimeEventHandler):
 
     def _reset_config(self):
         self.session_created = False
+        self.session_updated = False
         self.session_config = self.default_session_config.copy()
         self.input_audio_buffer = bytearray()
+        self.user_requested_human_followup = False
+
+    def _compose_instructions(self, system_message: str) -> str:
+        if self.session_preamble:
+            return self.session_preamble + "\n" + system_message
+        return system_message
 
     async def _send(self, msg: dict):
         try:
@@ -382,20 +422,22 @@ class RealtimeClient(RealtimeEventHandler):
     def _add_api_event_handlers(self):
         ra = self.realtime
         ra.on("server.session.created", self._on_session_created)
+        ra.on("server.session.updated", self._on_session_updated)
         ra.on("server.response.created", self._on_response_created)
+        ra.on("server.response.done", self._on_response_done)
         ra.on("server.response.output_item.added", self._process_event)
         ra.on("server.response.content_part.added", self._process_event)
         ra.on("server.input_audio_buffer.speech_started", self._on_speech_started)
         ra.on("server.input_audio_buffer.speech_stopped", self._on_speech_stopped)
-        ra.on("server.conversation.item.created", self._on_item_created)
+        ra.on("server.conversation.item.added", self._on_item_created)
         ra.on("server.conversation.item.truncated", self._process_event)
         ra.on("server.conversation.item.deleted", self._process_event)
         ra.on(
             "server.conversation.item.input_audio_transcription.completed",
             self._on_transcription_completed,
         )
-        ra.on("server.response.audio_transcript.delta", self._on_transcript_delta)
-        ra.on("server.response.audio.delta", self._on_audio_delta)
+        ra.on("server.response.output_audio_transcript.delta", self._on_transcript_delta)
+        ra.on("server.response.output_audio.delta", self._on_audio_delta)
         ra.on("server.response.text.delta", self._process_event)
         ra.on("server.response.function_call_arguments.delta", self._process_event)
         ra.on("server.response.output_item.done", self._on_output_item_done)
@@ -403,9 +445,90 @@ class RealtimeClient(RealtimeEventHandler):
     def _on_session_created(self, event):
         self.session_created = True
 
+    def _on_session_updated(self, event):
+        self.session_updated = True
+        session = event.get("session") or {}
+        if not isinstance(session, dict):
+            session = {}
+        audio_out = session.get("audio", {}).get("output", {})
+        if not isinstance(audio_out, dict):
+            audio_out = {}
+        logger.info(
+            "Session config applied — voice=%s, speed=%s, language=%s",
+            audio_out.get("voice"), audio_out.get("speed"), audio_out.get("language", "N/A"),
+        )
+
     async def _on_response_created(self, event):
         self._process_event(event)
+
+        # 종료 의사 감지 직후 자동 생성되는 일반 응답은 취소하고,
+        # 종료 전용 멘트만 한 번 발화하도록 전환한다.
+        if self.suppress_next_auto_response_for_close and self.pending_auto_end and not self.awaiting_forced_closing:
+            self.suppress_next_auto_response_for_close = False
+            self.pending_auto_end = False
+            self.awaiting_forced_closing = True
+            self.cancelling_for_forced_closing = True
+            self.forced_closing_line = FORCED_CLOSING_LINE
+            await self.realtime.send("response.cancel", {})
+            await self.create_response(
+                instructions=(
+                    "고객이 상담 종료 의사를 밝혔습니다. "
+                    f"다음 한 문장만 응답하세요: '{self.forced_closing_line}'"
+                )
+            )
+            return
+
+        await self.realtime.send("input_audio_buffer.clear", {})
         await self._send({"type": "session_status", "status": "thinking"})
+
+    async def _on_response_done(self, event):
+        resp = event.get("response") or {}
+        if not isinstance(resp, dict):
+            resp = {}
+        status = resp.get("status", "unknown")
+        status_details = resp.get("status_details") or {}
+        if isinstance(status_details, dict):
+            reason = status_details.get("reason", "")
+        else:
+            reason = str(status_details)
+        logger.info("Response done — status=%s, reason=%s", status, reason)
+        if status == "cancelled":
+            logger.warning("Response cancelled: %s", reason or "barge-in or server interrupt")
+            if self.cancelling_for_forced_closing:
+                self.cancelling_for_forced_closing = False
+                return
+            if self.awaiting_forced_closing:
+                self.awaiting_forced_closing = False
+                await self._send({
+                    "type": "auto_session_end",
+                    "reason": "고객 종료 의사 감지",
+                    "close_now": True,
+                })
+                return
+
+        # 종료 의사 감지 후에는 일반 답변 다음에 종료 전용 멘트를 반드시 한 번 더 발화한다.
+        if self.pending_auto_end and not self.awaiting_forced_closing:
+            self.pending_auto_end = False
+            self.awaiting_forced_closing = True
+            self.forced_closing_line = FORCED_CLOSING_LINE
+            await self.create_response(
+                instructions=(
+                    "고객이 상담 종료 의사를 밝혔습니다. "
+                    f"다음 한 문장만 응답하세요: '{self.forced_closing_line}'"
+                )
+            )
+            return
+
+        if self.awaiting_forced_closing:
+            self.awaiting_forced_closing = False
+            await self._send({
+                "type": "auto_session_end",
+                "reason": "고객 종료 의사 감지",
+                "close_after_playback": True,
+            })
+            return
+
+        await self._send({"type": "session_status", "status": "listening"})
 
     def _process_event(self, event, *args):
         try:
@@ -433,12 +556,63 @@ class RealtimeClient(RealtimeEventHandler):
     async def _on_transcription_completed(self, event):
         item, delta = self._process_event(event)
         if delta and delta.get("transcript"):
+            user_text = delta["transcript"].strip()
+            self.last_user_transcript = user_text
             await self._send({
                 "type": "transcript",
                 "role": "user",
-                "text": delta["transcript"],
+                "text": user_text,
                 "agent": self.current_agent,
+                "item_id": event.get("item_id"),
             })
+            if self._is_explicit_human_escalation_request(user_text) and not self.user_requested_human_followup:
+                self.user_requested_human_followup = True
+                await self.update_session(
+                    tools=self.assistant.get_tools_for_session(
+                        self.current_agent,
+                        include_human_followup=True,
+                    )
+                )
+            if self._is_end_gesture(user_text):
+                self.awaiting_forced_closing = False
+                self.pending_auto_end = True
+                self.suppress_next_auto_response_for_close = True
+
+    def _is_end_gesture(self, text: str) -> bool:
+        if not text:
+            return False
+        normalized = re.sub(r"\s+", "", text)
+        for pattern in END_SESSION_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE) or re.search(pattern.replace("\\s*", ""), normalized, re.IGNORECASE):
+                return True
+        return False
+
+    def _is_compensation_request(self, text: str) -> bool:
+        if not text:
+            return False
+        patterns = (
+            r"추가\s*보상",
+            r"보상",
+            r"쿠폰",
+            r"증액",
+            r"자동\s*보상",
+            r"반복\s*이슈",
+            r"품절.*취소",
+        )
+        return any(re.search(p, text, re.IGNORECASE) for p in patterns)
+
+    def _is_explicit_human_escalation_request(self, text: str) -> bool:
+        if not text:
+            return False
+        patterns = (
+            r"상담원\s*연결",
+            r"사람\s*(이랑|과)\s*얘기",
+            r"담당자\s*연락",
+            r"재연락",
+            r"콜백",
+            r"직접\s*연결",
+        )
+        return any(re.search(p, text, re.IGNORECASE) for p in patterns)
 
     async def _on_transcript_delta(self, event):
         item, delta = self._process_event(event)
@@ -449,6 +623,8 @@ class RealtimeClient(RealtimeEventHandler):
                 "text": delta["transcript"],
                 "agent": self.current_agent,
                 "delta": True,
+                "item_id": event.get("item_id"),
+                "response_id": event.get("response_id"),
             })
 
     async def _on_audio_delta(self, event):
@@ -462,8 +638,10 @@ class RealtimeClient(RealtimeEventHandler):
         item, _ = self._process_event(event)
         if item and item["status"] == "completed":
             self.dispatch("conversation.item.completed", {"item": item})
-        if item and item.get("formatted", {}).get("tool"):
-            await self._call_tool(item["formatted"]["tool"])
+        formatted = (item or {}).get("formatted") or {}
+        tool = formatted.get("tool")
+        if tool:
+            await self._call_tool(tool)
 
     # -----------------------------------------------------------------------
     # Tool / agent dispatch
@@ -471,8 +649,55 @@ class RealtimeClient(RealtimeEventHandler):
 
     async def _call_tool(self, tool: dict):
         tool_name = tool["name"]
+        effective_tool = tool
+
+        # Deterministic guard:
+        # In delivery context, compensation requests should be handled by refund assistant
+        # before human follow-up unless user explicitly asked escalation.
+        if (
+            tool_name == "request_human_followup"
+            and not self.user_requested_human_followup
+        ):
+            if (
+                self.current_agent == "Assistant_DeliveryAssistant"
+                and self._is_compensation_request(self.last_user_transcript)
+            ):
+                logger.info(
+                    "Reroute tool call from request_human_followup to Assistant_RefundAssistant for compensation request"
+                )
+                tool_name = "Assistant_RefundAssistant"
+                effective_tool = {
+                    "name": tool_name,
+                    "call_id": tool["call_id"],
+                    "arguments": "{}",
+                }
+            else:
+                logger.info(
+                    "Blocked request_human_followup because user did not explicitly request callback/escalation"
+                )
+                await self._send({
+                    "type": "tool_call",
+                    "name": tool_name,
+                    "args": {},
+                    "call_id": tool["call_id"],
+                    "result": "고객이 상담원 연결이나 콜백을 명시적으로 요청하지 않았습니다. 현재 범위에서 계속 안내하거나, 필요하면 먼저 상담원 연결 의사를 확인하세요.",
+                    "status": "done",
+                })
+                await self.realtime.send(
+                    "conversation.item.create",
+                    {
+                        "item": {
+                            "type": "function_call_output",
+                            "call_id": tool["call_id"],
+                            "output": "고객이 상담원 연결이나 콜백을 명시적으로 요청하지 않았습니다. 현재 범위에서 계속 안내하거나, 필요하면 먼저 상담원 연결 의사를 확인하세요.",
+                        }
+                    },
+                )
+                await self.create_response()
+                return
+
         try:
-            args = json.loads(tool["arguments"]) if tool["arguments"] else {}
+            args = json.loads(effective_tool["arguments"]) if effective_tool["arguments"] else {}
         except json.JSONDecodeError:
             args = {}
 
@@ -482,6 +707,7 @@ class RealtimeClient(RealtimeEventHandler):
             "type": "tool_call",
             "name": tool_name,
             "args": args,
+            "call_id": effective_tool["call_id"],
             "status": "calling",
         })
 
@@ -504,6 +730,7 @@ class RealtimeClient(RealtimeEventHandler):
                     "type": "tool_call",
                     "name": tool_name,
                     "args": args,
+                    "call_id": effective_tool["call_id"],
                     "result": {"switched_to": target.get("name", tool_name)},
                     "status": "done",
                 })
@@ -514,20 +741,17 @@ class RealtimeClient(RealtimeEventHandler):
                     {
                         "item": {
                             "type": "function_call_output",
-                            "call_id": tool["call_id"],
+                            "call_id": effective_tool["call_id"],
                             "output": json.dumps({"status": "ok", "agent": tool_name}),
                         }
                     },
                 )
-                # instructions and tools are top-level session fields in gpt-realtime-2
-                await self.realtime.send(
-                    "session.update",
-                    {
-                        "session": {
-                            "instructions": target["system_message"],
-                            "tools": self.assistant.get_tools_for_session(tool_name),
-                        }
-                    },
+                await self.update_session(
+                    instructions=self._compose_instructions(target["system_message"]),
+                    tools=self.assistant.get_tools_for_session(
+                        tool_name,
+                        include_human_followup=self.user_requested_human_followup,
+                    ),
                 )
             else:
                 tool_def = self.assistant.find_tool(tool_name)
@@ -540,6 +764,7 @@ class RealtimeClient(RealtimeEventHandler):
                     "type": "tool_call",
                     "name": tool_name,
                     "args": args,
+                    "call_id": effective_tool["call_id"],
                     "result": result,
                     "status": "done",
                 })
@@ -548,7 +773,7 @@ class RealtimeClient(RealtimeEventHandler):
                     {
                         "item": {
                             "type": "function_call_output",
-                            "call_id": tool["call_id"],
+                            "call_id": effective_tool["call_id"],
                             "output": result if isinstance(result, str) else json.dumps(result),
                         }
                     },
@@ -560,7 +785,7 @@ class RealtimeClient(RealtimeEventHandler):
                 {
                     "item": {
                         "type": "function_call_output",
-                        "call_id": tool["call_id"],
+                        "call_id": effective_tool["call_id"],
                         "output": json.dumps({"error": traceback.format_exc()}),
                     }
                 },
@@ -575,22 +800,30 @@ class RealtimeClient(RealtimeEventHandler):
     def is_connected(self) -> bool:
         return self.realtime.is_connected()
 
-    async def connect(self, transfer_context: str = "") -> None:
+    async def connect(self, session_preamble: str = "") -> None:
         if self.is_connected():
             raise RuntimeError("Already connected")
         await self.realtime.connect()
+        self.session_preamble = session_preamble.strip()
         root = self.assistant.get_agent("root")
-        instructions = root["system_message"]
-        if transfer_context:
-            instructions = transfer_context + "\n" + instructions
+        instructions = self._compose_instructions(root["system_message"])
         # instructions is a top-level session field in gpt-realtime-2
         self.session_config["instructions"] = instructions
-        self.session_config["tools"] = self.assistant.get_tools_for_session("root")
+        self.session_config["tools"] = self.assistant.get_tools_for_session(
+            "root",
+            include_human_followup=self.user_requested_human_followup,
+        )
         await self.update_session()
 
     async def wait_for_session(self) -> None:
-        while not self.session_created:
-            await asyncio.sleep(0.01)
+        timeout = 10.0
+        elapsed = 0.0
+        while not self.session_updated:
+            await asyncio.sleep(0.05)
+            elapsed += 0.05
+            if elapsed >= timeout:
+                logger.error("Timeout waiting for session.updated — session config may not be applied")
+                break
 
     async def disconnect(self) -> None:
         self.session_created = False
@@ -604,6 +837,16 @@ class RealtimeClient(RealtimeEventHandler):
         if self.realtime.is_connected():
             await self.realtime.send("session.update", {"session": session})
 
+    async def update_voice(self, voice: str, speed: float | None = None) -> None:
+        audio = self.session_config.setdefault("audio", {})
+        output = audio.setdefault("output", {})
+        output["voice"] = voice
+        if speed is not None:
+            output["speed"] = speed
+        self.session_updated = False
+        await self.update_session()
+        logger.info("Voice change requested: %s (speed=%s)", voice, speed)
+
     async def append_input_audio(self, buf: bytearray) -> None:
         if len(buf) > 0:
             await self.realtime.send(
@@ -612,15 +855,17 @@ class RealtimeClient(RealtimeEventHandler):
             )
             self.input_audio_buffer.extend(buf)
 
-    async def create_response(self) -> None:
+    async def create_response(self, instructions: str | None = None) -> None:
         if self.get_turn_detection_type() is None and len(self.input_audio_buffer) > 0:
             await self.realtime.send("input_audio_buffer.commit")
             self.conversation.queue_input_audio(self.input_audio_buffer)
             self.input_audio_buffer = bytearray()
-        await self.realtime.send("response.create")
+        payload = {}
+        if instructions:
+            payload = {"response": {"instructions": instructions}}
+        await self.realtime.send("response.create", payload)
 
     def get_turn_detection_type(self) -> str | None:
-        # gpt-realtime-2: turn_detection is nested under audio.input
         return (
             self.session_config
             .get("audio", {})

@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 import logging
@@ -26,6 +27,17 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="GPT-Realtime-2 Voice CS Demo")
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+ALLOWED_VOICES = {
+    "sage",
+    "shimmer",
+    "verse",
+    "ballad",
+    "alloy",
+    "ash",
+    "echo",
+    "cedar",
+    "marin",
+}
 
 
 def build_transfer_context(state: dict) -> str:
@@ -37,8 +49,9 @@ def build_transfer_context(state: dict) -> str:
         return ""
 
     cid = state.get("customer_id", "CUST-001")
-    tier_label = {"vip": "VIP", "regular": "일반", "problem": "불만 고객", "urgent": "긴급"}.get(
-        state.get("customer_tier", "regular"), "일반"
+    tier_label = {"vip": "VIP", "regular": "일반"}.get(state.get("customer_tier", "regular"), "일반")
+    tone_label = {"normal": "일반", "urgent": "긴급", "complaint": "불만"}.get(
+        state.get("request_tone", "normal"), "일반"
     )
     order_status_label = {
         "normal": "정상",
@@ -48,10 +61,13 @@ def build_transfer_context(state: dict) -> str:
     }.get(state.get("order_status", "normal"), "정상")
 
     inquiry = state.get("inquiry_type", "simple")
+    tone = state.get("request_tone", "normal")
 
     header = (
         f"[전환 컨텍스트 — Workflow 미처리 → GPT-Realtime-2 세션 시작]\n"
         f"- 고객 코드: {cid} / 등급: {tier_label}\n"
+        f"- 요청 형태: {tone_label}\n"
+        f"- 최근 주문번호: {state.get('recent_order_id', '미확인')} / 주문일시: {state.get('recent_order_at', '미확인')}\n"
         f"- 주문 상태: {order_status_label}\n"
     )
 
@@ -62,13 +78,6 @@ def build_transfer_context(state: dict) -> str:
             "- 고객 요청 내용: 주문 변경 + 배송지 수정 + 쿠폰 적용 동시 요청\n"
             f"- 쿠폰 보유: {'있음' if state.get('has_coupon') else '없음'}\n"
             "- 지시사항: 복합 요청을 단계적으로 처리하고 각 단계마다 고객 확인을 받으세요.\n"
-        ),
-        "emotional": (
-            "- Workflow 처리 시간: 약 4분\n"
-            "- 전환 사유: 감정적 고객, Workflow 처리 불가\n"
-            "- 고객 상태: 배송 지연으로 인해 매우 불만족 상태, 감정 고조\n"
-            "- 지시사항: 먼저 충분히 공감하고 사과하세요. 해결책은 그 다음입니다. "
-            "톤을 부드럽고 차분하게 유지하세요.\n"
         ),
         "ambiguous": (
             "- Workflow 처리 시간: 약 1분\n"
@@ -81,7 +90,105 @@ def build_transfer_context(state: dict) -> str:
     }
 
     body = bodies.get(inquiry, "- 전환 사유: Workflow 처리 불가\n")
+    if tone == "complaint":
+        body += "- 고객 정서: 불만 상태. 첫 답변에서 공감/사과를 먼저 제시하세요.\n"
+    elif tone == "urgent":
+        body += "- 고객 요청 긴급도: 높음. 핵심 조치와 결과를 먼저 짧게 안내하세요.\n"
     return header + body + "\n"
+
+
+def build_opening_greeting(state: dict) -> str:
+    if demo_state.is_default_state(state):
+        return "안녕하세요, 무엇을 도와드릴까요?"
+
+    tone = state.get("request_tone", "normal")
+    order_status = state.get("order_status", "normal")
+
+    if not state.get("workflow_resolved", True):
+        return (
+            "이전 상담이 만족스럽지 않으셨나 보군요. "
+            "상담 내역을 확인하고 추가적인 지원이 가능한지 확인 후 안내드리겠습니다."
+        )
+
+    if tone == "complaint":
+        return "안녕하세요. 먼저 불편을 드려 죄송합니다. 현재 주문 상태를 바로 확인하고 가능한 조치를 빠르게 안내드리겠습니다."
+    if tone == "urgent":
+        return "안녕하세요. 긴급 문의로 접수해 우선 처리하겠습니다. 핵심 상태부터 바로 확인해드릴게요."
+
+    if order_status == "delayed":
+        return "안녕하세요. 배송 지연 관련 문의를 도와드리겠습니다. 현재 상태를 먼저 확인해볼게요."
+    if order_status == "lost":
+        return "안녕하세요. 배송 분실 건 확인을 도와드리겠습니다. 주문 상태부터 바로 조회하겠습니다."
+    if order_status == "refund_requested":
+        return "안녕하세요. 환불 요청 진행 상황을 도와드리겠습니다. 현재 접수 상태부터 확인하겠습니다."
+    return "안녕하세요. 배송이나 주문 관련 문의를 도와드릴게요. 궁금하신 내용을 편하게 말씀해 주세요."
+
+
+def build_session_preamble(state: dict) -> str:
+    tier_label = {"vip": "VIP", "regular": "일반"}.get(state.get("customer_tier", "regular"), "일반")
+    tone_label = {"normal": "일반", "urgent": "긴급", "complaint": "불만"}.get(
+        state.get("request_tone", "normal"), "일반"
+    )
+    order_status_label = {
+        "normal": "정상",
+        "delayed": "배송 지연 중",
+        "lost": "배송 분실",
+        "refund_requested": "환불 요청 중",
+    }.get(state.get("order_status", "normal"), "정상")
+    inquiry_label = {
+        "simple": "단순 문의",
+        "complex": "복합 의도",
+        "ambiguous": "모호 요청",
+    }.get(state.get("inquiry_type", "simple"), "단순 문의")
+    workflow_label = "사전 Workflow 미처리(Fallback)" if not state.get("workflow_resolved", True) else "Workflow 처리 가능"
+
+    preamble = (
+        "[세션 컨텍스트 — 데모 사전 주입 정보]\n"
+        f"- 고객 코드: {state.get('customer_id', 'CUST-001')}\n"
+        f"- 최근 주문번호: {state.get('recent_order_id', '미확인')}\n"
+        f"- 최근 주문일시: {state.get('recent_order_at', '미확인')}\n"
+        f"- 반복 이슈 횟수: {state.get('repeat_count', 0)}\n"
+        f"- 판매자 책임 사유: {'예' if state.get('seller_fault') else '아니오'}\n"
+        f"- 주문 상태 이력: {', '.join(state.get('order_status_history', [])) if isinstance(state.get('order_status_history'), list) else state.get('order_status_history', '없음')}\n"
+        f"- 고객 등급: {tier_label}\n"
+        f"- 요청 형태: {tone_label}\n"
+        f"- 주문 상태: {order_status_label}\n"
+        f"- 문의 유형: {inquiry_label}\n"
+        f"- 쿠폰 보유: {'있음' if state.get('has_coupon') else '없음'}\n"
+        f"- 현재 상태: {workflow_label}\n\n"
+        "[첫 응답 규칙]\n"
+        "- 세션의 첫 음성 응답은 아래 첫 인사 문안을 기준으로 시작하세요.\n"
+        "- 아래 첫 인사 문안을 우선적으로 따르되, 어색하면 자연스럽게 다듬어도 됩니다.\n"
+        "- 이미 assistant가 한 번이라도 응답했다면 반복 인사하지 마세요.\n"
+        f"- 첫 인사 문안: {build_opening_greeting(state)}\n"
+    )
+
+    transfer_context = build_transfer_context(state)
+    if transfer_context:
+        preamble += "\n" + transfer_context
+    return preamble
+
+
+def apply_demo_injection(payload: dict) -> tuple[str | None, float | None]:
+    update = dict(payload)
+    preset_id = update.pop("preset", None)
+    requested_voice = update.pop("voice", None)
+    requested_speed = update.pop("speed", None)
+
+    selected_voice: str | None = None
+    if isinstance(requested_voice, str):
+        normalized_voice = requested_voice.strip().lower()
+        if normalized_voice in ALLOWED_VOICES:
+            selected_voice = normalized_voice
+        else:
+            selected_voice = "sage"
+
+    if preset_id:
+        demo_state.apply_preset(preset_id)
+    if update:
+        demo_state.update(update)
+
+    return selected_voice, requested_speed
 
 
 @app.websocket("/ws")
@@ -107,12 +214,24 @@ async def websocket_endpoint(websocket: WebSocket):
     client = RealtimeClient(assistant=assistant, send_callback=send_to_browser)
 
     try:
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=0.5)
+            initial_msg = json.loads(raw)
+            if initial_msg.get("type") == "demo_inject":
+                voice, speed = apply_demo_injection(initial_msg.get("payload", {}))
+                logger.info(f"Initial demo state: {demo_state.get()}")
+                if voice:
+                    await client.update_voice(voice, speed)
+        except asyncio.TimeoutError:
+            pass
+
         await send_to_browser({"type": "session_status", "status": "connecting"})
 
-        # 전환 컨텍스트 빌드 및 주입
+        # 세션 컨텍스트 및 전환 컨텍스트 빌드
         state = demo_state.get()
+        session_preamble = build_session_preamble(state)
         transfer_ctx = build_transfer_context(state)
-        await client.connect(transfer_context=transfer_ctx)
+        await client.connect(session_preamble=session_preamble)
         await client.wait_for_session()
 
         # 브라우저에 transfer context 전송 (UI 시각화용)
@@ -125,6 +244,9 @@ async def websocket_endpoint(websocket: WebSocket):
         await send_to_browser({"type": "session_status", "status": "connected"})
         logger.info("Azure OpenAI Realtime session established")
 
+        # 세션 시작 시 인사 유도 — server_vad는 음성 없으면 응답 안 하므로 명시적 트리거
+        await client.create_response()
+
         while True:
             raw = await websocket.receive_text()
             msg = json.loads(raw)
@@ -135,12 +257,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 await client.append_input_audio(bytearray(audio_bytes))
 
             elif msg_type == "demo_inject":
-                payload = msg.get("payload", {})
-                preset_id = payload.pop("preset", None)
-                if preset_id:
-                    demo_state.apply_preset(preset_id)
-                if payload:
-                    demo_state.update(payload)
+                voice, speed = apply_demo_injection(msg.get("payload", {}))
+                if voice:
+                    await client.update_voice(voice, speed)
                 logger.info(f"Demo state: {demo_state.get()}")
                 await send_to_browser({"type": "demo_state", "state": demo_state.get()})
 

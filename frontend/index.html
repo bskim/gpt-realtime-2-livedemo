@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Voice CS × GPT-Realtime-2 Demo</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -21,9 +22,8 @@
   </div>
   <div class="header-right">
     <span class="status-chip" id="statusChip">disconnected</span>
-    <button class="btn btn-connect" id="btnConnect">연결</button>
-    <button class="btn btn-record"  id="btnRecord"  disabled>● REC</button>
-    <button class="btn btn-stop"    id="btnStop"    disabled>■ STOP</button>
+    <button class="btn btn-connect" id="btnStart">상담 시작</button>
+    <button class="btn btn-stop"    id="btnEnd" disabled>상담 종료</button>
   </div>
 </header>
 
@@ -90,8 +90,15 @@
         <div class="toggle-row" id="tierRow">
           <button class="toggle-btn active" data-field="customer_tier" data-val="regular">일반</button>
           <button class="toggle-btn" data-field="customer_tier" data-val="vip">VIP</button>
-          <button class="toggle-btn" data-field="customer_tier" data-val="problem">불만</button>
-          <button class="toggle-btn" data-field="customer_tier" data-val="urgent">긴급</button>
+        </div>
+      </div>
+
+      <div class="demo-section">
+        <div class="demo-label">요청 형태</div>
+        <div class="toggle-row" id="toneRow">
+          <button class="toggle-btn active" data-field="request_tone" data-val="normal">일반</button>
+          <button class="toggle-btn" data-field="request_tone" data-val="urgent">긴급</button>
+          <button class="toggle-btn" data-field="request_tone" data-val="complaint">불만</button>
         </div>
       </div>
 
@@ -110,7 +117,6 @@
         <div class="toggle-row" id="inquiryRow">
           <button class="toggle-btn active" data-field="inquiry_type" data-val="simple">단순</button>
           <button class="toggle-btn" data-field="inquiry_type" data-val="complex">복합</button>
-          <button class="toggle-btn" data-field="inquiry_type" data-val="emotional">감정</button>
           <button class="toggle-btn" data-field="inquiry_type" data-val="ambiguous">모호</button>
         </div>
       </div>
@@ -121,9 +127,58 @@
       </div>
 
       <div class="demo-section">
+        <div class="demo-label">최근 주문번호</div>
+        <input class="demo-input" id="recentOrderIdInput" type="text" value="ORD-20260527-1001" placeholder="주문번호">
+      </div>
+
+      <div class="demo-section">
+        <div class="demo-label">최근 주문일시</div>
+        <input class="demo-input" id="recentOrderAtInput" type="datetime-local" value="2026-05-25T14:20">
+      </div>
+
+      <div class="demo-section">
+        <div class="demo-label">반복 이슈 횟수</div>
+        <input class="demo-input" id="repeatCountInput" type="number" min="0" step="1" value="0" placeholder="예: 2">
+      </div>
+
+      <div class="demo-section">
+        <div class="toggle-row">
+          <button class="toggle-btn" data-field="seller_fault" data-val="true" id="sellerFaultBtn">판매자 책임</button>
+        </div>
+      </div>
+
+      <div class="demo-section">
+        <div class="demo-label">주문 상태 이력 (쉼표 구분)</div>
+        <input class="demo-input" id="orderStatusHistoryInput" type="text" value="" placeholder="예: 배송준비, 품절취소, 재주문, 배송지연">
+      </div>
+
+      <div class="demo-section">
+        <div class="demo-label">음성 (Voice)</div>
+        <div class="voice-row">
+          <select class="demo-select" id="voiceSelect">
+            <option value="sage" selected>sage</option>
+            <option value="shimmer">shimmer</option>
+            <option value="verse">verse</option>
+            <option value="ballad">ballad</option>
+            <option value="alloy">alloy</option>
+            <option value="ash">ash</option>
+            <option value="echo">echo</option>
+            <option value="cedar">cedar</option>
+            <option value="marin">marin</option>
+          </select>
+          <button class="btn btn-sm" id="btnVoiceApply">적용</button>
+        </div>
+        <div class="voice-speed-row">
+          <label class="voice-speed-label" for="voiceSpeedRange">Speed</label>
+          <input id="voiceSpeedRange" class="voice-speed-range" type="range" min="0.75" max="1.25" step="0.05" value="1.05">
+          <span id="voiceSpeedValue" class="voice-speed-value">1.05x</span>
+        </div>
+      </div>
+
+      <div class="demo-section">
         <div class="toggle-row">
           <button class="toggle-btn" data-field="has_coupon" data-val="true" id="couponBtn">쿠폰 보유</button>
-          <button class="toggle-btn" data-field="workflow_resolved" data-val="false" id="workflowFailBtn">Workflow 미처리</button>
+          <button class="toggle-btn" data-field="workflow_resolved" data-val="false" id="workflowFailBtn">사전 Workflow 미처리</button>
         </div>
       </div>
 
@@ -149,7 +204,7 @@
       <!-- Transfer banner (shown when fallback is active) -->
       <div class="transfer-banner" id="transferBanner">
         <span class="tb-icon">🔄</span>
-        <span>Workflow 미처리 — GPT-Realtime-2 E2E 세션으로 전환됨</span>
+        <span>사전 Workflow 미처리 — GPT-Realtime-2 E2E 세션으로 전환됨</span>
       </div>
     </div>
   </section>

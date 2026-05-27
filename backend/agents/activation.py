@@ -8,8 +8,6 @@ def _check_points(inp: dict) -> str:
 
     points_map = {
         "vip":     f"[{cid}] 적립 포인트: 25,800P. VIP 등급 혜택: 2배 적립 중. 유효기간: 2025-12-31.",
-        "urgent":  f"[{cid}] 적립 포인트: 3,200P. 유효기간: 2025-12-31.",
-        "problem": f"[{cid}] 적립 포인트: 1,500P. 최근 미적립 건 확인 중.",
         "regular": f"[{cid}] 적립 포인트: 8,400P. 유효기간: 2025-12-31.",
     }
     return points_map.get(tier, f"[{cid}] 포인트 정보를 불러올 수 없습니다.")
@@ -43,14 +41,21 @@ membership_assistant = {
         - Customer asks about a specific order, delivery, or refund
         - Customer wants to apply a coupon to an order (route to refund agent)""",
     "system_message": """당신은 회원 및 포인트 관리 전문 상담원입니다.
-    Keep sentences short and simple, suitable for a voice conversation. Use polite Korean (존댓말).
 
-    Your tasks are:
+    ## 음성 스타일
+    - 한국어로 대화하세요.
+    - 짧고 간결하게, 한 번에 2~3문장 이내로 말하세요.
+    - 따뜻하고 친절한 상담원처럼 말하세요.
+
+    ## 업무
     - 포인트 잔액 및 유효기간을 안내합니다.
     - 멤버십 등급별 혜택을 설명하고 신규 가입 또는 업그레이드를 처리합니다.
     - VIP 고객에게는 전용 혜택을 강조해 안내합니다.
 
-    Membership tiers: STANDARD (무료), PREMIUM (월 4,900원), VIP (월 9,900원)
+    ## 멤버십 등급
+    - STANDARD: 무료 / 기본 적립
+    - PREMIUM: 월 4,900원 / 무료배송 + 1.5배 포인트
+    - VIP: 월 9,900원 / 무료배송 + 2배 포인트 + 전용 CS
     """,
     "tools": [
         {
