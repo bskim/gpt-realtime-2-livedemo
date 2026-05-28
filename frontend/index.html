@@ -15,10 +15,6 @@
 <header class="header">
   <div class="header-left">
     <div class="logo">Voice CS<span> × GPT-Realtime-2</span></div>
-    <div class="path-indicator" id="pathIndicator">
-      <span class="pi-dot"></span>
-      <span id="pathLabel">대기 중</span>
-    </div>
   </div>
   <div class="header-right">
     <span class="status-chip" id="statusChip">disconnected</span>
@@ -211,23 +207,8 @@
 
   <!-- ── RIGHT: Architecture / Agent / Tool Log ── -->
   <section class="panel log-panel">
-    <div class="panel-header">아키텍처 / 에이전트 / Tool</div>
+    <div class="panel-header">에이전트 / Tool 호출</div>
     <div class="log-body" id="logBody">
-
-      <!-- Hybrid architecture diagram -->
-      <div class="arch-diagram">
-        <div class="arch-row" id="archPrimary">
-          <span class="arch-dot"></span>
-          <span class="arch-label">Primary Path (STT+LLM+TTS)</span>
-          <span class="arch-pct">~80%</span>
-        </div>
-        <div class="arch-arrow">↓</div>
-        <div class="arch-row" id="archRt2">
-          <span class="arch-dot"></span>
-          <span class="arch-label">RT-2 Fallback (E2E Voice)</span>
-          <span class="arch-pct">~20%</span>
-        </div>
-      </div>
 
       <!-- Current agent -->
       <div class="current-agent-card" id="currentAgentCard">

@@ -92,8 +92,6 @@ let demoState = {
 const btnStart      = document.getElementById('btnStart');
 const btnEnd        = document.getElementById('btnEnd');
 const statusChip    = document.getElementById('statusChip');
-const pathIndicator = document.getElementById('pathIndicator');
-const pathLabel     = document.getElementById('pathLabel');
 const messages      = document.getElementById('messages');
 const logBody       = document.getElementById('logBody');
 const canvasIn      = document.getElementById('canvasInput');
@@ -103,8 +101,6 @@ const workflowBadge    = document.getElementById('workflowBadge');
 const transferViz   = document.getElementById('transferViz');
 const tfCtx         = document.getElementById('tfCtx');
 const transferBanner= document.getElementById('transferBanner');
-const archPrimary   = document.getElementById('archPrimary');
-const archRt2       = document.getElementById('archRt2');
 const currentAgentCard = document.getElementById('currentAgentCard');
 const caDot         = document.getElementById('caDot');
 const caLabel       = document.getElementById('caLabel');
@@ -184,10 +180,6 @@ function resetConversationUI() {
   caLabel.textContent = '대기 중';
   caSub.textContent = '';
 
-  pathIndicator.className = 'path-indicator';
-  pathLabel.textContent = '대기 중';
-  archPrimary.classList.remove('active-primary');
-  archRt2.classList.remove('active-rt2');
   transferViz.classList.remove('visible');
   tfCtx.textContent = '';
 
@@ -320,14 +312,6 @@ function onTransferContext(msg) {
   isFallback = msg.is_fallback;
 
   if (isFallback) {
-    // Header path indicator
-    pathIndicator.className = 'path-indicator fallback';
-    pathLabel.textContent = '🔴 RT-2 FALLBACK';
-
-    // Architecture highlight
-    archPrimary.classList.remove('active-primary');
-    archRt2.classList.add('active-rt2');
-
     // Transfer banner in chat
     transferBanner.classList.add('visible');
 
@@ -341,10 +325,6 @@ function onTransferContext(msg) {
     if (msg.context) {
       addContextBadge(msg.context);
     }
-  } else {
-    pathIndicator.className = 'path-indicator primary';
-    pathLabel.textContent = '✓ PRIMARY PATH (Workflow)';
-    archPrimary.classList.add('active-primary');
   }
 }
 
