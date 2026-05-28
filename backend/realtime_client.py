@@ -40,10 +40,6 @@ END_SESSION_PATTERNS = [
 FORCED_CLOSING_LINE = "문의 주셔서 감사합니다. 상담을 마무리하겠습니다."
 
 
-# ---------------------------------------------------------------------------
-# Audio helpers
-# ---------------------------------------------------------------------------
-
 def float_to_16bit_pcm(float32_array: np.ndarray) -> np.ndarray:
     return (np.clip(float32_array, -1, 1) * 32767).astype(np.int16)
 
@@ -59,10 +55,6 @@ def array_buffer_to_base64(arr: np.ndarray) -> str:
         arr = arr.tobytes()
     return base64.b64encode(arr).decode("utf-8")
 
-
-# ---------------------------------------------------------------------------
-# Event handler infrastructure
-# ---------------------------------------------------------------------------
 
 class RealtimeEventHandler:
     def __init__(self):
@@ -91,10 +83,6 @@ class RealtimeEventHandler:
         self.on(event_name, handler)
         return await future
 
-
-# ---------------------------------------------------------------------------
-# Low-level WebSocket connection — gpt-realtime-2 GA endpoint
-# ---------------------------------------------------------------------------
 
 class RealtimeAPI(RealtimeEventHandler):
     def __init__(self):
@@ -158,10 +146,6 @@ class RealtimeAPI(RealtimeEventHandler):
             await self.ws.close()
             self.ws = None
 
-
-# ---------------------------------------------------------------------------
-# Conversation state tracker
-# ---------------------------------------------------------------------------
 
 class RealtimeConversation:
     default_frequency = AUDIO_SAMPLE_RATE
@@ -339,10 +323,6 @@ class RealtimeConversation:
         return item, {"arguments": event["delta"]}
 
 
-# ---------------------------------------------------------------------------
-# High-level client — uses gpt-realtime-2 session schema
-# ---------------------------------------------------------------------------
-
 class RealtimeClient(RealtimeEventHandler):
     def __init__(
         self,
@@ -395,8 +375,6 @@ class RealtimeClient(RealtimeEventHandler):
         self._reset_config()
         self._add_api_event_handlers()
 
-    # -----------------------------------------------------------------------
-
     def _reset_config(self):
         self.session_created = False
         self.session_updated = False
@@ -415,9 +393,7 @@ class RealtimeClient(RealtimeEventHandler):
         except Exception as e:
             logger.warning(f"send_callback failed: {e}")
 
-    # -----------------------------------------------------------------------
-    # Event handlers wired to RealtimeAPI
-    # -----------------------------------------------------------------------
+    # Event handlers wired to RealtimeAPI.
 
     def _add_api_event_handlers(self):
         ra = self.realtime
@@ -643,9 +619,7 @@ class RealtimeClient(RealtimeEventHandler):
         if tool:
             await self._call_tool(tool)
 
-    # -----------------------------------------------------------------------
-    # Tool / agent dispatch
-    # -----------------------------------------------------------------------
+    # Tool / agent dispatch.
 
     async def _call_tool(self, tool: dict):
         tool_name = tool["name"]
@@ -793,9 +767,7 @@ class RealtimeClient(RealtimeEventHandler):
 
         await self.create_response()
 
-    # -----------------------------------------------------------------------
-    # Connection & session
-    # -----------------------------------------------------------------------
+    # Connection & session.
 
     def is_connected(self) -> bool:
         return self.realtime.is_connected()

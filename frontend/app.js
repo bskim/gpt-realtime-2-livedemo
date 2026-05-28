@@ -1,10 +1,8 @@
-// ═══════════════════════════════════════════════════════════
-//  Voice CS × GPT-Realtime-2 Demo — app.js
-// ═══════════════════════════════════════════════════════════
+// Voice CS × GPT-Realtime-2 demo client.
 
 const SAMPLE_RATE = 24000;
 
-// ── Workflow mock conversations per scenario ──────────────────
+// Workflow mock conversations per scenario.
 const WORKFLOW_SCENARIOS = {
   S1: {
     workflow_resolved: true,
@@ -23,7 +21,7 @@ const WORKFLOW_SCENARIOS = {
       { role: 'bot',    text: '주문 변경은 가능합니다. 배송지 변경을 먼저 도와드릴게요.' },
       { role: 'user',   text: '아니요, 세 가지를 한 번에 처리하고 싶어요.' },
       { role: 'bot',    text: '죄송합니다, 복합 요청 처리가 어렵습니다...' },
-      { role: 'system', text: '⚠ 사전 Workflow 미처리 — 복합 의도 처리 불가 → RT-2 전환' },
+      { role: 'system', text: '복합 요청으로 상담 이관' },
     ],
     badgeClass: 'failed',
     badgeText: '미처리',
@@ -34,7 +32,7 @@ const WORKFLOW_SCENARIOS = {
       { role: 'user',   text: '왜 이렇게 배송이 늦어요! 항상 이러네요.' },
       { role: 'bot',    text: '불편을 드려 죄송합니다. 주문번호를 말씀해 주시겠어요?' },
       { role: 'user',   text: '됐어요, 그냥 사람이랑 얘기하고 싶어요!' },
-      { role: 'system', text: '⚠ 사전 Workflow 미처리 — 감정적 고객 감지 (불만 4회 이상) → RT-2 전환' },
+      { role: 'system', text: '고객 요청으로 상담 이관' },
     ],
     badgeClass: 'failed',
     badgeText: '미처리',
@@ -46,14 +44,14 @@ const WORKFLOW_SCENARIOS = {
       { role: 'bot',    text: '네, 말씀해 주세요. 무엇을 도와드릴까요?' },
       { role: 'user',   text: '아 잠깐만요, 그게 아니라... 어...' },
       { role: 'bot',    text: '죄송합니다, 말씀하신 내용을 이해하지 못했습니다.' },
-      { role: 'system', text: '⚠ 사전 Workflow 미처리 — 의도 파악 불가 (3회 실패) → RT-2 전환' },
+      { role: 'system', text: '의도 파악 실패로 상담 이관' },
     ],
     badgeClass: 'failed',
     badgeText: '미처리',
   },
 };
 
-// ── State ────────────────────────────────────────────────
+// State.
 let ws = null;
 let audioCtx = null;
 let mediaStream = null;
@@ -88,7 +86,7 @@ let demoState = {
   speed:         1.05,
 };
 
-// ── DOM refs ─────────────────────────────────────────────
+// DOM refs.
 const btnStart      = document.getElementById('btnStart');
 const btnEnd        = document.getElementById('btnEnd');
 const statusChip    = document.getElementById('statusChip');
@@ -186,9 +184,7 @@ function resetConversationUI() {
   Object.keys(toolCardMap).forEach(k => delete toolCardMap[k]);
 }
 
-// ═══════════════════════════════════════════════════════════
-//  WebSocket
-// ═══════════════════════════════════════════════════════════
+// WebSocket connection.
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${proto}://${location.host}/ws`);
@@ -226,9 +222,7 @@ function sendDemoState() {
   sendWs({ type: 'demo_inject', payload: { ...demoState } });
 }
 
-// ═══════════════════════════════════════════════════════════
-//  Server message handler
-// ═══════════════════════════════════════════════════════════
+// Server message handler.
 function handleServerMsg(msg) {
   switch (msg.type) {
     case 'session_status':    onSessionStatus(msg.status); break;
@@ -267,7 +261,7 @@ function onDemoState(state) {
   }
 }
 
-// ── Session status ───────────────────────────────────────
+// Session status.
 function onSessionStatus(status) {
   if (status === 'thinking') {
     // A new response turn is starting; close any previously streaming bubble.
@@ -307,7 +301,7 @@ function tryFinalizeAutoEnd() {
   }
 }
 
-// ── Transfer context ─────────────────────────────────────
+// Transfer context.
 function onTransferContext(msg) {
   isFallback = msg.is_fallback;
 
@@ -335,7 +329,7 @@ function addContextBadge(ctx) {
   insertLogEntry(el);
 }
 
-// ── Audio output ─────────────────────────────────────────
+// Audio output.
 function onAudioOutput(b64) {
   if (!audioCtx) return;
   if (currentStatus !== 'thinking') setStatus('speaking');
@@ -369,7 +363,7 @@ function onAudioOutput(b64) {
   nextPlayTime += buf.duration;
 }
 
-// ── Transcript ───────────────────────────────────────────
+// Transcript.
 let currentStreamId = null;
 
 function onTranscript(msg) {
@@ -433,7 +427,7 @@ function appendMsg(role, text, agentId) {
   return wrap;
 }
 
-// ── Agent switch ─────────────────────────────────────────
+// Agent switch.
 function onAgentSwitch(msg) {
   finishStreaming();
   streamingItemId = null;
@@ -465,7 +459,7 @@ function updateAgentCard(agentId, name) {
   caSub.textContent = agentId;
 }
 
-// ── Tool call ─────────────────────────────────────────────
+// Tool call.
 const toolCardMap = {};
 
 function onToolCall(msg) {
@@ -532,9 +526,7 @@ function addToolResultToChat(name, result) {
   messages.scrollTop = messages.scrollHeight;
 }
 
-// ═══════════════════════════════════════════════════════════
-//  Audio capture
-// ═══════════════════════════════════════════════════════════
+// Audio capture.
 async function startRecording() {
   audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
 
@@ -583,9 +575,7 @@ function stopRecording() {
   setStatus('disconnected');
 }
 
-// ═══════════════════════════════════════════════════════════
-//  Waveform drawing
-// ═══════════════════════════════════════════════════════════
+// Waveform drawing.
 function drawWaveforms() {
   if (!audioCtx) return;
   requestAnimationFrame(drawWaveforms);
@@ -614,9 +604,7 @@ function drawAnalyser(canvas, analyser, color) {
   ctx.stroke();
 }
 
-// ═══════════════════════════════════════════════════════════
-//  Demo control panel
-// ═══════════════════════════════════════════════════════════
+// Demo control panel.
 document.querySelectorAll('.preset-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
@@ -741,9 +729,7 @@ btnVoiceApply.addEventListener('click', () => {
   addLogEntry(`<div style="font-size:11px;color:var(--muted)">음성 프리셋 적용: ${escHtml(voice)} / speed ${speed.toFixed(2)}x</div>`);
 });
 
-// ═══════════════════════════════════════════════════════════
-//  Button handlers
-// ═══════════════════════════════════════════════════════════
+// Button handlers.
 btnStart.addEventListener('click', () => {
   resetConversationUI();
   connect();
@@ -764,9 +750,7 @@ function endSession() {
   setSessionLock(false);
 }
 
-// ═══════════════════════════════════════════════════════════
-//  Helpers
-// ═══════════════════════════════════════════════════════════
+// Helpers.
 function addLogEntry(html) {
   const el = document.createElement('div');
   el.innerHTML = html;
@@ -774,7 +758,7 @@ function addLogEntry(html) {
 }
 
 function insertLogEntry(el) {
-  // Insert after the current-agent-card (index 2 = after arch diagram + agent card)
+  // Insert right after the current-agent-card so new entries stay near the top.
   const anchor = currentAgentCard;
   anchor.insertAdjacentElement('afterend', el);
   logBody.scrollTop = logBody.scrollHeight;

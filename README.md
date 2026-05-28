@@ -1,12 +1,8 @@
 # GPT-Realtime-2 Live Demo — E-commerce Voice CS
 
-> [!IMPORTANT]
-> 이 저장소는 데모/실험 목적의 레퍼런스 구현이며, production-level 구현을 목표로 하지 않습니다.
+데모/실험 목적의 레퍼런스 구현입니다. 프로덕션 수준의 구현을 목표로 하지는 않습니다.
 
-하이브리드 고객서비스 아키텍처 라이브데모:  
-**STT+LLM+TTS Workflow (Primary ~80%) + GPT-Realtime-2 E2E Fallback (~20%)**
-
-> "Workflow가 처리하지 못한 복합/모호 요청과 긴급/불만 톤 요청을 GPT-Realtime-2가 처리한다"
+하이브리드 고객서비스 아키텍처 라이브데모: 기존 STT+LLM+TTS Workflow를 Primary로 두고, Workflow가 처리하기 어려운 복합/모호 요청이나 긴곡/불만 톤 요청을 GPT-Realtime-2 E2E 세션으로 이관하는 구조입니다.
 
 ---
 
@@ -20,9 +16,9 @@
 
 | 항목 | Windows | Linux | macOS |
 |------|---------|-------|-------|
-| [Azure CLI](https://docs.microsoft.com/cli/azure/install-azure-cli) | ✓ | ✓ | ✓ |
-| [Azure Developer CLI (azd)](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd) | ✓ | ✓ | ✓ |
-| Python 3.11+ | ✓ | ✓ | ✓ |
+| [Azure CLI](https://docs.microsoft.com/cli/azure/install-azure-cli) | 지원 | 지원 | 지원 |
+| [Azure Developer CLI (azd)](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd) | 지원 | 지원 | 지원 |
+| Python 3.11+ | 지원 | 지원 | 지원 |
 | PowerShell (pwsh) | 기본 내장 | — | — |
 | bash | — | 기본 내장 | 기본 내장 |
 
@@ -30,26 +26,26 @@
 > **Linux/macOS**: bash hook(`scripts/load_python_env.sh`)이 자동 실행됩니다.  
 > 두 hook 모두 등록되어 있으며 해당 OS에서 동작하는 쪽만 실행됩니다.
 
-> [!NOTE]
-> **Windows에서 아래 경고가 출력되는 것은 정상입니다. 무시하세요.**
-> ```
-> WARNING: 'preprovision' hook failed ...: 'bash' is not recognized as an internal or external command
-> ```
-> Windows/Linux/macOS 동시 지원을 위해 sh(bash)와 pwsh(PowerShell) hook을 함께 등록했습니다.  
-> Windows에서는 bash hook이 실패하고 PowerShell hook이 성공하며, Linux/macOS에서는 반대로 동작합니다.
+Windows에서 아래 경고가 출력되는 것은 정상이며 무시하면 됩니다.
+
+```
+WARNING: 'preprovision' hook failed ...: 'bash' is not recognized as an internal or external command
+```
+
+Windows/Linux/macOS 동시 지원을 위해 sh(bash)와 pwsh(PowerShell) hook을 함께 등록했습니다. Windows에서는 bash hook이 실패하고 PowerShell hook이 성공하며, Linux/macOS에서는 반대로 동작합니다.
 
 #### 실행
 
-> [!IMPORTANT]
-> `gpt-realtime-2`는 Preview 모델이며 기본 할당량이 매우 제한적입니다.
-> 할당량 증설 폼에는 아직 해당 모델이 등록되어 있지 않으므로, 기본 할당량 내에서 사용하세요.
->
-> **재배포 시 `Insufficient quota` 오류가 발생하면:**
-> ```powershell
-> azd down --purge   # 기존 리소스 완전 삭제 (soft-delete 포함)
-> azd up             # 깨끗한 상태에서 재배포
-> ```
-> `--purge` 옵션은 AI Services의 soft-delete까지 제거하여 같은 이름으로 재배포 시 충돌을 방지합니다.
+`gpt-realtime-2`는 Preview 모델이며 기본 할당량이 매우 제한적입니다. 할당량 증설 폼에는 아직 해당 모델이 등록되어 있지 않으므로, 기본 할당량 내에서 사용하세요.
+
+재배포 시 `Insufficient quota` 오류가 발생하면 기존 리소스를 완전 삭제한 후 다시 배포하면 됩니다.
+
+```powershell
+azd down --purge   # 기존 리소스 완전 삭제 (soft-delete 포함)
+azd up             # 깨끗한 상태에서 재배포
+```
+
+`--purge` 옵션은 AI Services의 soft-delete까지 제거하여 같은 이름으로 재배포 시 충돌을 방지합니다.
 
 ##### Windows (PowerShell)
 
@@ -111,8 +107,7 @@ uvicorn main:app --reload --port 8000
 
 > `gpt-realtime-2`는 오디오를 직접(native) 이해하므로 fallback 구간에서는 별도 STT 체인을 두지 않고 상담을 진행합니다. 음성 입력과 출력을 기반으로 한 실시간 대화 모델로, 단순한 음성 응답을 넘어 내부 추론 기능을 포함한 지능형 대화를 지원합니다. 이를 통해 복잡한 질문이나 다단계 요청도 음성 인터페이스 안에서 직접 처리할 수 있으며, 긴 대화에서도 맥락을 유지할 수 있습니다.
 
-> [!NOTE]
-> `gpt-realtime-2`는 Preview 상태이며, 한국어를 포함한 다국어 환경에서는 억양/발화 자연스러움이 환경에 따라 달라질 수 있습니다.
+Preview 상태이며, 한국어를 포함한 다국어 환경에서는 억양/발화 자연스러움이 환경에 따라 달라질 수 있습니다.
 
 ### 현재 웹 인터페이스의 전사 방식
 
@@ -229,32 +224,27 @@ uvicorn main:app --reload --port 8000
 
 ## 하이브리드 아키텍처 — 호출 흐름
 
-> "STT+LLM+TTS Workflow를 대체하지 않고, Workflow가 처리하지 못한 ~20%를 GPT-Realtime-2가 담당한다"
+기존 STT+LLM+TTS Workflow를 그대로 유지하고, Workflow가 처리하지 못한 요청만 GPT-Realtime-2 E2E 세션으로 이관합니다.
 
 ### 전체 호출 흐름
 
 ```mermaid
 flowchart TD
-    A([📞 인입 콜]) --> B["기존 STT\n(Primary Workflow)"]
+    A([인입 콜]) --> B["기존 STT\n(Primary Workflow)"]
     B --> C["STT+LLM+TTS Workflow\n기존 구현 — 변경 없음"]
     C --> D{"완결?"}
 
-    D -- "예 (~80%)" --> E[TTS 응답]
-    E --> Z([통화 종료 ✓])
+    D -- "예 (Primary)" --> E[TTS 응답]
+    E --> Z([통화 종료])
 
-    D -- "아니오 (~20%)" --> F["Workflow 미처리\n→ GPT-Realtime-2 전환"]
+    D -- "아니오 (Fallback)" --> F["Workflow 미처리\n→ GPT-Realtime-2 전환"]
     F --> G["GPT-Realtime-2 E2E 세션\n• 네이티브 오디오 In/Out (STT 불필요)\n• GPT-5급 실시간 추론 (128K 컨텍스트)\n• Workflow Tools 세션 내 재사용\n• 감정 인식 · Barge-in · Preamble 지원\n• 병렬 Tool 호출"]
     G --> H{"해결?"}
 
-    H -- "예 (~95% of all calls)" --> I[음성 응답]
+    H -- "예" --> I[음성 응답]
     I --> Z
 
-    H -- "아니오 (~5% of all calls)" --> J["상담원 전환\nTranscript + Summary 자동 전달"]
-
-    classDef primary fill:#0d2818,stroke:#3fb950,color:#3fb950
-    classDef rt2     fill:#2d0e0e,stroke:#f85149,color:#f85149
-    classDef term    fill:#111920,stroke:#58a6ff,color:#58a6ff
-    classDef gate    fill:#1c2128,stroke:#e3b341,color:#e3b341
+    H -- "아니오" --> J["상담원 전환\nTranscript + Summary 자동 전달"]
 
     class B,C,E primary
     class F,G,I rt2
@@ -269,7 +259,7 @@ flowchart TD
 | 아키텍처 | STT → Workflow → TTS | RT-2 E2E (전체 콜) | A Primary + C Fallback |
 | 품질 특성 | 표준 음성 응답 | 높은 상호작용 품질 | **핵심 구간 품질 강화** |
 | 단가 특성 | 상대적으로 낮음 | 상대적으로 높음 | **품질/비용 균형형** |
-| 기존 구현 보전 | ✓ | ✗ 전면 교체 | **✓ 변경 최소화** |
+| 기존 구현 보전 | 유지 | 전면 교체 | **변경 최소화** |
 
 > 기존 STT + LLM + TTS 조합 대비 더 높은 품질을 기대할 수 있으나, request 당 단가가 높아질 수 있으므로 하이브리드 적용을 검토하는 방식을 권장합니다.
 
