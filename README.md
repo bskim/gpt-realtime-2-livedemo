@@ -412,6 +412,7 @@ Azure 인프라 (Bicep):
 ```
 gpt-realtime-2-livedemo/
 ├── backend/
+│   ├── .env.example         # backend/.env 의 템플릿 (실제 로드되는 곳)
 │   ├── main.py                  # FastAPI + WebSocket 엔드포인트
 │   ├── realtime_client.py       # gpt-realtime-2 클라이언트 (GA endpoint)
 │   ├── assistant_service.py     # 멀티에이전트 오케스트레이터
@@ -439,5 +440,5 @@ gpt-realtime-2-livedemo/
 │   ├── load_python_env.sh / .ps1
 │   └── write_env.sh / .ps1
 ├── azure.yaml
-└── .env.example
+└── README.md
 ```
