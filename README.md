@@ -34,7 +34,9 @@ WARNING: 'preprovision' hook failed ...: 'bash' is not recognized as an internal
 
 Windows/Linux/macOS 동시 지원을 위해 sh(bash)와 pwsh(PowerShell) hook을 함께 등록했습니다. Windows에서는 bash hook이 실패하고 PowerShell hook이 성공하며, Linux/macOS에서는 반대로 동작합니다.
 
-> **중요**: `azd up` 도중 PowerShell hook이 빨간색으로 실패하면 `backend/.env` 가 만들어지지 않습니다. 이 경우 백엔드가 시스템 전역 환경변수(`AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`)를 그대로 사용해 **다른 리소스로 접속하며 404가 발생**할 수 있습니다.
+> **트러블슈팅 참고사항** — 대부분의 경우 문제 없이 진행되며, hook이 실패한 드문 경우에만 참고하면 됩니다.
+>
+> `azd up` 도중 PowerShell hook이 빨간색으로 실패하면 `backend/.env` 가 만들어지지 않을 수 있습니다. 이때 백엔드가 시스템 전역 환경변수(`AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`)를 그대로 사용해 다른 리소스로 접속하며 404가 발생할 수 있습니다.
 >
 > 복구는 Bicep 배포가 성공했는지에 따라 다릅니다.
 >
