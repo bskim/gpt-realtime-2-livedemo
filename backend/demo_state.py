@@ -2,6 +2,7 @@
 Module-level singleton for demo injection state.
 Tool functions import get() to read current values at call time.
 """
+from i18n import t
 
 DEFAULT_STATE: dict = {
     "customer_id":       "CUST-001",
@@ -21,10 +22,10 @@ DEFAULT_STATE: dict = {
 
 _state: dict = DEFAULT_STATE.copy()
 
-# Scenario presets (S1~S4) for CSaaS voice escalation demo
+# Scenario presets (S1~S4) for CSaaS voice escalation demo.
+# label과 order_status_history 는 locale별 값을 렌더링 시점에 t() 로 해석한다.
 PRESETS = {
     "S1": {
-        "label":             "S1 단순 FAQ",
         "customer_tier":     "regular",
         "request_tone":      "normal",
         "recent_order_id":   "ORD-S1-1001",
@@ -35,10 +36,8 @@ PRESETS = {
         "has_coupon":        False,
         "repeat_count":      0,
         "seller_fault":      False,
-        "order_status_history": [],
     },
     "S2": {
-        "label":             "S2 복합 의도",
         "customer_tier":     "vip",
         "request_tone":      "urgent",
         "recent_order_id":   "ORD-S2-2207",
@@ -49,10 +48,8 @@ PRESETS = {
         "has_coupon":        True,
         "repeat_count":      0,
         "seller_fault":      False,
-        "order_status_history": [],
     },
     "S3": {
-        "label":             "S3 불만 고객",
         "customer_tier":     "regular",
         "request_tone":      "complaint",
         "recent_order_id":   "ORD-S3-3304",
@@ -63,10 +60,8 @@ PRESETS = {
         "has_coupon":        False,
         "repeat_count":      2,
         "seller_fault":      True,
-        "order_status_history": ["배송준비", "품절취소", "재주문", "배송지연"],
     },
     "S4": {
-        "label":             "S4 모호 요청",
         "customer_tier":     "regular",
         "request_tone":      "normal",
         "recent_order_id":   "ORD-S4-4412",
@@ -77,13 +72,32 @@ PRESETS = {
         "has_coupon":        False,
         "repeat_count":      1,
         "seller_fault":      False,
-        "order_status_history": ["배송준비", "취소요청"],
     },
 }
 
+# active_preset이 설정되면 order_status_history 는 locale에서 가져온다.
+_PRESET_HISTORY_KEYS = {"S3", "S4"}
+
+
+def preset_label(preset_id: str) -> str:
+    return t(f"preset.{preset_id}.label")
+
+
+def preset_labels() -> dict[str, str]:
+    return {pid: preset_label(pid) for pid in PRESETS}
+
+
+def _preset_history(preset_id: str) -> list:
+    value = t(f"preset.{preset_id}.history")
+    return value if isinstance(value, list) else []
+
 
 def get() -> dict:
-    return _state.copy()
+    snapshot = _state.copy()
+    pid = snapshot.get("active_preset")
+    if pid in _PRESET_HISTORY_KEYS:
+        snapshot["order_status_history"] = list(_preset_history(pid))
+    return snapshot
 
 
 def update(payload: dict) -> None:
@@ -108,8 +122,12 @@ def update(payload: dict) -> None:
 def apply_preset(preset_id: str) -> dict:
     preset = PRESETS.get(preset_id)
     if preset:
-        _state.update({k: v for k, v in preset.items() if k != "label"})
+        _state.update(preset)
         _state["active_preset"] = preset_id
+        if preset_id in _PRESET_HISTORY_KEYS:
+            _state["order_status_history"] = list(_preset_history(preset_id))
+        else:
+            _state["order_status_history"] = []
     return get()
 
 

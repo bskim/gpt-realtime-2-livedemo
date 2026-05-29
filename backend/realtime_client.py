@@ -15,29 +15,21 @@ import websockets
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
 from assistant_service import AssistantService
+from i18n import t
 
 logger = logging.getLogger(__name__)
 
 AUDIO_SAMPLE_RATE = 24000  # gpt-realtime-2: PCM16 24 kHz
 
-END_SESSION_PATTERNS = [
-    r"감사(합니다|해요|해)",
-    r"이제\s*됐(어요|습니다)",
-    r"괜찮(아요|습니다)",
-    r"더\s*상담\s*(필요\s*없|안\s*해)",
-    r"그만\s*할게",
-    r"종료\s*할게",
-    r"여기까지\s*할게",
-    r"연락\s*기다리겠습니다",
-    r"기다릴게요",
-    r"확인해\s*보고.*다시\s*연락드릴게요",
-    r"문제\s*있으면.*다시\s*연락드릴게요",
-    r"알겠습니다.*다시\s*연락드릴게요",
-    r"수고\s*하세요",
-    r"고맙습니다",
-]
 
-FORCED_CLOSING_LINE = "문의 주셔서 감사합니다. 상담을 마무리하겠습니다."
+def _end_session_patterns() -> list[str]:
+    """locale 별 종료 의사 감지 정규식."""
+    value = t("realtime.end_session_patterns")
+    return value if isinstance(value, list) else []
+
+
+def _forced_closing_line() -> str:
+    return t("realtime.forced_closing_line")
 
 
 def float_to_16bit_pcm(float32_array: np.ndarray) -> np.ndarray:
@@ -351,7 +343,7 @@ class RealtimeClient(RealtimeEventHandler):
         self.suppress_next_auto_response_for_close: bool = False
         self.cancelling_for_forced_closing: bool = False
         self.awaiting_forced_closing: bool = False
-        self.forced_closing_line: str = FORCED_CLOSING_LINE
+        self.forced_closing_line: str = _forced_closing_line()
 
         # gpt-realtime-2 session config: nested audio.input / audio.output structure
         self.default_session_config = {
@@ -359,7 +351,7 @@ class RealtimeClient(RealtimeEventHandler):
             "output_modalities": ["audio"],
             "audio": {
                 "input": {
-                    "transcription": {"model": "whisper-1", "language": "ko"},
+                    "transcription": {"model": "whisper-1", "language": t("realtime.transcription_language")},
                     "turn_detection": {
                         "type": "server_vad",
                         "threshold": 0.9,
@@ -455,12 +447,12 @@ class RealtimeClient(RealtimeEventHandler):
             self.pending_auto_end = False
             self.awaiting_forced_closing = True
             self.cancelling_for_forced_closing = True
-            self.forced_closing_line = FORCED_CLOSING_LINE
+            self.forced_closing_line = _forced_closing_line()
             await self.realtime.send("response.cancel", {})
             await self.create_response(
-                instructions=(
-                    "고객이 상담 종료 의사를 밝혔습니다. "
-                    f"다음 한 문장만 응답하세요: '{self.forced_closing_line}'"
+                instructions=t(
+                    "realtime.forced_closing_instruction",
+                    line=self.forced_closing_line,
                 )
             )
             return
@@ -488,7 +480,7 @@ class RealtimeClient(RealtimeEventHandler):
                 self.awaiting_forced_closing = False
                 await self._send({
                     "type": "auto_session_end",
-                    "reason": "고객 종료 의사 감지",
+                    "reason": t("realtime.auto_end_reason"),
                     "close_now": True,
                 })
                 return
@@ -497,11 +489,11 @@ class RealtimeClient(RealtimeEventHandler):
         if self.pending_auto_end and not self.awaiting_forced_closing:
             self.pending_auto_end = False
             self.awaiting_forced_closing = True
-            self.forced_closing_line = FORCED_CLOSING_LINE
+            self.forced_closing_line = _forced_closing_line()
             await self.create_response(
-                instructions=(
-                    "고객이 상담 종료 의사를 밝혔습니다. "
-                    f"다음 한 문장만 응답하세요: '{self.forced_closing_line}'"
+                instructions=t(
+                    "realtime.forced_closing_instruction",
+                    line=self.forced_closing_line,
                 )
             )
             return
@@ -510,7 +502,7 @@ class RealtimeClient(RealtimeEventHandler):
             self.awaiting_forced_closing = False
             await self._send({
                 "type": "auto_session_end",
-                "reason": "고객 종료 의사 감지",
+                "reason": t("realtime.auto_end_reason"),
                 "close_after_playback": True,
             })
             return
@@ -569,7 +561,7 @@ class RealtimeClient(RealtimeEventHandler):
         if not text:
             return False
         normalized = re.sub(r"\s+", "", text)
-        for pattern in END_SESSION_PATTERNS:
+        for pattern in _end_session_patterns():
             if re.search(pattern, text, re.IGNORECASE) or re.search(pattern.replace("\\s*", ""), normalized, re.IGNORECASE):
                 return True
         return False
