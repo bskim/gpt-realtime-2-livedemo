@@ -480,9 +480,10 @@ gpt-realtime-2-livedemo/
 │   ├── index.html
 │   ├── app.js
 │   ├── style.css
+│   ├── i18n.js                   # locale resolution (?lang / localStorage) + data-i18n DOM walk
 │   └── i18n/
-│       ├── ko.json
-│       └── en.json
+│       ├── ko.json               # Korean UI strings
+│       └── en.json               # English UI strings
 ├── infra/
 │   ├── main.bicep
 │   ├── main.parameters.json
@@ -493,5 +494,6 @@ gpt-realtime-2-livedemo/
 │   ├── load_python_env.sh / .ps1
 │   └── write_env.sh / .ps1
 ├── azure.yaml
-└── README.md
+├── README.md                     # Korean README (default entry)
+└── README.en.md                  # English README
 ```

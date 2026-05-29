@@ -356,14 +356,15 @@ Browser
 ├── WebSocket /ws  ←→  FastAPI Backend
 │     ├── PCM16 24kHz 오디오 스트림
 │     ├── transcript / agent_switch / tool_call 이벤트
-│     └── demo_inject (시나리오 제어)
+│     └── demo_inject (시나리오 제어, `locale` 포함)
 └── Web Audio API (마이크 캡처 + PCM16 재생)
 
 FastAPI Backend
 ├── RealtimeClient  →  Azure AI Services (gpt-realtime-2)
 │     └── wss://{endpoint}/openai/v1/realtime?model=gpt-realtime-2
-├── AssistantService (Root → Order / Delivery / Refund)
-└── DemoState  →  Tool 목업 응답 주입
+├── AssistantService (Root → Order / Delivery / Refund / …)
+├── DemoState  →  Tool 목업 응답 주입
+└── i18n (backend/locales/{ko,en}.py)  →  로캘별 프롬프트/응답 문자열
 
 현재 mock 조회 구현 위치:
   backend/demo_state.py
@@ -465,33 +466,43 @@ Azure 인프라 (Bicep):
 ```
 gpt-realtime-2-livedemo/
 ├── backend/
-│   ├── .env.example         # backend/.env 의 템플릿 (실제 로드되는 곳)
+│   ├── .env.example             # backend/.env 의 템플릿 (실제 로드되는 곳)
 │   ├── main.py                  # FastAPI + WebSocket 엔드포인트
 │   ├── realtime_client.py       # gpt-realtime-2 클라이언트 (GA endpoint)
 │   ├── assistant_service.py     # 멀티에이전트 오케스트레이터
 │   ├── demo_state.py            # 데모 상태 주입 (이커머스)
+│   ├── i18n.py                  # 로캘 해석기 + t() 헬퍼 (세션별 ContextVar)
+│   ├── locales/
+│   │   ├── __init__.py          # 로캘 레지스트리 (ko/en)
+│   │   ├── ko.py                # 한국어 문자열 테이블
+│   │   └── en.py                # 영어 문자열 테이블
 │   ├── agents/
 │   │   ├── root.py
 │   │   ├── order.py
 │   │   ├── delivery.py
 │   │   ├── refund.py
-│   │   ├── sales.py         # 상품 문의
-│   │   ├── activation.py    # 회원/포인트
-│   │   └── technical.py     # A/S 불량
+│   │   ├── sales.py             # 상품 문의
+│   │   ├── activation.py        # 회원/포인트
+│   │   └── technical.py         # A/S 불량
 │   └── requirements.txt
 ├── frontend/
 │   ├── index.html
 │   ├── app.js
-│   └── style.css
+│   ├── style.css
+│   ├── i18n.js                  # 로캘 해석 (?lang / localStorage) + data-i18n DOM 치환
+│   └── i18n/
+│       ├── ko.json              # 한국어 UI 문자열
+│       └── en.json              # 영어 UI 문자열
 ├── infra/
 │   ├── main.bicep
 │   ├── main.parameters.json
 │   └── modules/
 │       ├── dependent_resources.bicep  # AI Services + gpt-realtime-2 배포
-│       └── foundry_project.bicep     # Foundry Project (CognitiveServices/accounts/projects)
+│       └── foundry_project.bicep      # Foundry Project (CognitiveServices/accounts/projects)
 ├── scripts/
 │   ├── load_python_env.sh / .ps1
 │   └── write_env.sh / .ps1
 ├── azure.yaml
-└── README.md
+├── README.md                    # 한국어 README (기본 진입점)
+└── README.en.md                 # English README
 ```
