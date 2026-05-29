@@ -52,7 +52,29 @@ body {
 .header-right { display: flex; align-items: center; gap: 10px; }
 
 .logo { font-size: 13px; font-weight: 700; color: var(--text); }
-.logo span { color: var(--accent); }
+.logo .logo-accent { color: var(--accent); }
+
+.locale-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.locale-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 9px;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+}
+.locale-btn + .locale-btn { border-left: 1px solid var(--border); }
+.locale-btn:hover:not(:disabled) { color: var(--text); }
+.locale-btn.active { background: var(--accent); color: #0d1117; }
+.locale-btn:disabled { opacity: 0.35; cursor: default; }
 
 .status-chip {
   font-size: 11px;

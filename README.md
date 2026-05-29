@@ -1,5 +1,7 @@
 # GPT-Realtime-2 Live Demo — E-commerce Voice CS
 
+> 🌐 **언어**: **한국어** · [English](README.en.md)
+
 데모/실험 목적의 레퍼런스 구현입니다. 프로덕션 수준의 구현을 목표로 하지는 않습니다.
 
 하이브리드 고객서비스 아키텍처 라이브데모: 기존 STT+LLM+TTS Workflow를 Primary로 두고, Workflow가 처리하기 어려운 복합/모호 요청이나 긴곡/불만 톤 요청을 GPT-Realtime-2 E2E 세션으로 이관하는 구조입니다.
@@ -128,6 +130,49 @@ uvicorn main:app --reload --port 8000
 ```
 
 브라우저: `http://localhost:8000`
+
+---
+
+## Locale (다국어)
+
+이 프로젝트는 한국어와 영어를 모두 지원합니다. 지금 보고 있는 문서는 **한국어 기본** 진입점이며, 영어 진입점은 [README.en.md](README.en.md) 입니다.
+
+동작 자체는 두 로캘이 동일하며, UI 라벨·에이전트 프롬프트·툴 응답 문자열만 바뀝니다.
+
+### 로캘 결정 규칙
+
+| 레이어 | 결정 방식 | 기본값 |
+|------|----------|--------|
+| 서버 | `DEMO_LOCALE` 환경변수 (`ko` \| `en`) | `ko` |
+| 클라이언트 | `?lang=ko` / `?lang=en` 쿼리스트링 → 헤더의 `KO/EN` 토글(`localStorage` 저장) | 서버 기본을 따름 |
+| 동기화 | 클라이언트가 첫 WebSocket 메시지(`demo_inject`)에 자신의 `locale` 을 함께 보내고, 서버는 그 세션 동안 클라이언트 값을 우선합니다. | 클라이언트 우선 |
+
+즉, 한 세션 안에서 서버와 클라이언트 로캘이 어긋날 수 없습니다 — 클라이언트가 권위입니다. `DEMO_LOCALE` 은 **서버 기본값**(세션 전 프롬프트, `/health`, 로그 출력 등)을 정하는 역할만 합니다.
+
+### 영어로 전환
+
+```powershell
+azd env set DEMO_LOCALE en
+```
+
+이후 브라우저에서 `http://localhost:8000?lang=en` 으로 접속하거나, 페이지 헤더의 `KO / EN` 토글로 즉시 전환할 수 있습니다. 영어 기본 가이드는 [README.en.md](README.en.md) 를 참고하세요.
+
+### 한국어 유지
+
+이 README 안내대로 진행하면 됩니다. 별도 환경변수 설정이 없으면 한국어가 기본입니다(`DEMO_LOCALE` 미지정 = `ko`, `?lang` 미지정 = `ko`).
+
+### 새 언어 추가하기 (예: 일본어 `ja`)
+
+로캘은 백엔드 문자열 테이블과 프론트엔드 JSON 테이블 두 곳에 같은 키로 추가합니다. 기존 `ko` / `en` 을 참고용으로 옆에 두고 복사하면 가장 빠릅니다.
+
+1. **백엔드 문자열 테이블 추가** — `backend/locales/ko.py` 를 통째로 복사해 `backend/locales/ja.py` 를 만들고 각 값만 번역합니다. 키 구조는 절대 바꾸지 마세요 (`agents.root.system_message`, `tools.lookup_order.description`, `greetings.default` 등 — 코드에서 `t("...")` 로 그대로 참조합니다).
+2. **백엔드 레지스트리 등록** — `backend/locales/__init__.py` 의 `LOCALES` dict 에 `"ja": ja_table` 항목을 추가합니다 (`from . import ja` import 포함).
+3. **프론트엔드 문자열 테이블 추가** — `frontend/i18n/ko.json` 을 복사해 `frontend/i18n/ja.json` 을 만들고 값만 번역합니다. workflow mock 대사(`workflow.S1.msg.*` …)와 preset history(`preset.S3.history`)도 동일한 키로 포함되어야 합니다.
+4. **프론트엔드 사용 가능 목록 등록** — `frontend/i18n.js` 상단의 `AVAILABLE = ['ko', 'en']` 배열에 `'ja'` 를 추가합니다.
+5. **헤더 토글 버튼 추가 (선택)** — `frontend/index.html` 의 `.locale-toggle` 블록에 `<button class="locale-btn" data-locale="ja">JA</button>` 를 추가하면 클릭 한 번으로 전환됩니다. 토글을 안 추가해도 `?lang=ja` URL 로는 동작합니다.
+6. **서버 기본을 새 로캘로 (선택)** — `azd env set DEMO_LOCALE ja` 또는 `backend/.env` 에 `DEMO_LOCALE=ja`.
+
+검증: 백엔드 재기동 → `http://localhost:8000/health` 의 `available_locales` 에 `"ja"` 가 보이는지 확인 → 브라우저에서 `?lang=ja` 진입 → UI 라벨/첫 greeting/tool 응답이 모두 일본어로 나오면 OK. 키 누락 시 프론트는 KO 로, 백엔드는 키 문자열 자체로 fallback 되므로 화면에 영문 키가 보이면 그 키만 채우면 됩니다.
 
 ---
 

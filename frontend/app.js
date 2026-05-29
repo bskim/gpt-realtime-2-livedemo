@@ -2,54 +2,30 @@
 
 const SAMPLE_RATE = 24000;
 
-// Workflow mock conversations per scenario.
-const WORKFLOW_SCENARIOS = {
-  S1: {
-    workflow_resolved: true,
-    messages: [
-      { role: 'user', text: '배송 얼마나 걸려요?' },
-      { role: 'bot',  text: '안녕하세요! 일반 배송은 2-3 영업일, 빠른 배송은 익일 도착입니다.' },
-      { role: 'bot',  text: '추가 문의가 있으시면 말씀해 주세요.' },
-    ],
-    badgeClass: 'ok',
-    badgeText: '처리됨',
-  },
-  S2: {
-    workflow_resolved: false,
-    messages: [
-      { role: 'user',   text: '주문 바꾸고 싶은데요, 배송지도 바꾸고 쿠폰도 쓰고 싶어요.' },
-      { role: 'bot',    text: '주문 변경은 가능합니다. 배송지 변경을 먼저 도와드릴게요.' },
-      { role: 'user',   text: '아니요, 세 가지를 한 번에 처리하고 싶어요.' },
-      { role: 'bot',    text: '죄송합니다, 복합 요청 처리가 어렵습니다...' },
-      { role: 'system', text: '복합 요청으로 상담 이관' },
-    ],
-    badgeClass: 'failed',
-    badgeText: '미처리',
-  },
-  S3: {
-    workflow_resolved: false,
-    messages: [
-      { role: 'user',   text: '왜 이렇게 배송이 늦어요! 항상 이러네요.' },
-      { role: 'bot',    text: '불편을 드려 죄송합니다. 주문번호를 말씀해 주시겠어요?' },
-      { role: 'user',   text: '됐어요, 그냥 사람이랑 얘기하고 싶어요!' },
-      { role: 'system', text: '고객 요청으로 상담 이관' },
-    ],
-    badgeClass: 'failed',
-    badgeText: '미처리',
-  },
-  S4: {
-    workflow_resolved: false,
-    messages: [
-      { role: 'user',   text: '저 그게요... 아, 뭐였더라...' },
-      { role: 'bot',    text: '네, 말씀해 주세요. 무엇을 도와드릴까요?' },
-      { role: 'user',   text: '아 잠깐만요, 그게 아니라... 어...' },
-      { role: 'bot',    text: '죄송합니다, 말씀하신 내용을 이해하지 못했습니다.' },
-      { role: 'system', text: '의도 파악 실패로 상담 이관' },
-    ],
-    badgeClass: 'failed',
-    badgeText: '미처리',
-  },
-};
+// Build per-locale workflow scenarios from i18n strings.
+function buildWorkflowScenarios() {
+  const scenarios = {};
+  ['S1', 'S2', 'S3', 'S4'].forEach(id => {
+    const messages = [];
+    for (let i = 1; i <= 8; i++) {
+      const roleKey = `workflow.${id}.msg.${i}.role`;
+      const textKey = `workflow.${id}.msg.${i}.text`;
+      const role = window.i18n.t(roleKey);
+      const text = window.i18n.t(textKey);
+      if (role === roleKey || text === textKey) break;
+      messages.push({ role, text });
+    }
+    scenarios[id] = {
+      workflow_resolved: id === 'S1',
+      messages,
+      badgeClass: window.i18n.t(`workflow.${id}.badge_class`),
+      badgeText: window.i18n.t(`workflow.${id}.badge`),
+    };
+  });
+  return scenarios;
+}
+
+let WORKFLOW_SCENARIOS = {};
 
 // State.
 let ws = null;
@@ -69,6 +45,7 @@ let isEndingSession = false;
 let currentStatus = 'disconnected';
 let streamingMsgEl = null;
 let streamingItemId = null;
+let activePresetId = null;
 let demoState = {
   customer_id:   'CUST-001',
   recent_order_id: 'ORD-20260527-1001',
@@ -84,6 +61,7 @@ let demoState = {
   has_coupon:    false,
   voice:         'sage',
   speed:         1.05,
+  locale:        'ko',
 };
 
 // DOM refs.
@@ -114,6 +92,7 @@ const recentOrderIdInput = document.getElementById('recentOrderIdInput');
 const recentOrderAtInput = document.getElementById('recentOrderAtInput');
 const repeatCountInput = document.getElementById('repeatCountInput');
 const orderStatusHistoryInput = document.getElementById('orderStatusHistoryInput');
+const localeButtons = Array.from(document.querySelectorAll('.locale-btn'));
 
 function parseHistoryInput(raw) {
   if (!raw || typeof raw !== 'string') return [];
@@ -135,21 +114,25 @@ function formatOrderAtForInput(serverDateTime) {
   return String(serverDateTime).replace(' KST', '').replace(' ', 'T').slice(0, 16);
 }
 
+function presetHistoryFor(id) {
+  const key = `preset.${id}.history`;
+  const raw = window.i18n.t(key);
+  if (!raw || raw === key) return [];
+  return parseHistoryInput(raw);
+}
+
 function setSessionLock(lock) {
   btnVoiceApply.disabled = lock;
   voiceSelect.disabled = lock;
   voiceSpeedRange.disabled = lock;
-  presetButtons.forEach(btn => {
-    btn.disabled = lock;
-  });
-  stateButtons.forEach(btn => {
-    btn.disabled = lock;
-  });
+  presetButtons.forEach(btn => { btn.disabled = lock; });
+  stateButtons.forEach(btn => { btn.disabled = lock; });
   customerIdInput.disabled = lock;
   recentOrderIdInput.disabled = lock;
   recentOrderAtInput.disabled = lock;
   repeatCountInput.disabled = lock;
   orderStatusHistoryInput.disabled = lock;
+  localeButtons.forEach(btn => { btn.disabled = lock; });
 }
 
 function resetConversationUI() {
@@ -159,12 +142,10 @@ function resetConversationUI() {
   autoEndPending = false;
   isEndingSession = false;
 
-  // Clear chat messages and keep transfer banner placeholder only.
   transferBanner.classList.remove('visible');
   messages.innerHTML = '';
   messages.appendChild(transferBanner);
 
-  // Clear dynamic log cards inserted after current agent card.
   let node = currentAgentCard.nextElementSibling;
   while (node) {
     const next = node.nextElementSibling;
@@ -172,10 +153,9 @@ function resetConversationUI() {
     node = next;
   }
 
-  // Reset agent/path indicators.
   currentAgent = 'root';
   caDot.className = 'ca-dot';
-  caLabel.textContent = '대기 중';
+  caLabel.textContent = window.i18n.t('log.current_agent.idle');
   caSub.textContent = '';
 
   transferViz.classList.remove('visible');
@@ -219,7 +199,7 @@ function sendWs(obj) {
 }
 
 function sendDemoState() {
-  sendWs({ type: 'demo_inject', payload: { ...demoState } });
+  sendWs({ type: 'demo_inject', payload: { ...demoState, locale: window.i18n.locale } });
 }
 
 // Server message handler.
@@ -233,12 +213,13 @@ function handleServerMsg(msg) {
     case 'tool_call':         onToolCall(msg); break;
     case 'demo_state':        onDemoState(msg.state); break;
     case 'auto_session_end':  onAutoSessionEnd(msg); break;
-    case 'error':             addLogEntry(`<div style="color:var(--red);font-size:11px">오류: ${msg.message}</div>`); break;
+    case 'error':             addLogEntry(`<div style="color:var(--red);font-size:11px">${escHtml(window.i18n.t('log.error_prefix', { message: msg.message }))}</div>`); break;
   }
 }
 
 function onAutoSessionEnd(msg) {
-  addLogEntry(`<div style="font-size:11px;color:var(--muted)">자동 상담 종료: ${escHtml(msg?.reason || '고객 종료 의사')}</div>`);
+  const reason = msg?.reason || window.i18n.t('log.auto_end.default_reason');
+  addLogEntry(`<div style="font-size:11px;color:var(--muted)">${escHtml(window.i18n.t('log.auto_end', { reason }))}</div>`);
   if (msg?.close_now) {
     endSession();
     return;
@@ -248,7 +229,7 @@ function onAutoSessionEnd(msg) {
 }
 
 function onDemoState(state) {
-  demoState = state;
+  demoState = { ...demoState, ...state };
   customerIdInput.value = state.customer_id || '';
   recentOrderIdInput.value = state.recent_order_id || '';
   recentOrderAtInput.value = formatOrderAtForInput(state.recent_order_at || '');
@@ -264,7 +245,6 @@ function onDemoState(state) {
 // Session status.
 function onSessionStatus(status) {
   if (status === 'thinking') {
-    // A new response turn is starting; close any previously streaming bubble.
     finishStreaming();
   }
   setStatus(status);
@@ -273,7 +253,7 @@ function onSessionStatus(status) {
     setSessionLock(true);
     startRecording().catch(err => {
       console.error('Mic error:', err);
-      alert('마이크 접근 권한이 필요합니다.');
+      alert(window.i18n.t('alert.mic_required'));
     });
   }
 }
@@ -282,14 +262,9 @@ function setStatus(s) {
   currentStatus = s;
   statusChip.className = `status-chip ${s}`;
   isSpeaking = (s === 'speaking');
-  statusChip.textContent = {
-    disconnected: 'disconnected',
-    connecting:   'connecting...',
-    connected:    'connected',
-    listening:    'listening',
-    thinking:     'thinking',
-    speaking:     'speaking',
-  }[s] || s;
+  const key = `status.${s}`;
+  const txt = window.i18n.t(key);
+  statusChip.textContent = (txt === key) ? s : txt;
   tryFinalizeAutoEnd();
 }
 
@@ -306,17 +281,10 @@ function onTransferContext(msg) {
   isFallback = msg.is_fallback;
 
   if (isFallback) {
-    // Transfer banner in chat
     transferBanner.classList.add('visible');
-
-    // Context panel in left panel
     if (msg.context) {
       transferViz.classList.add('visible');
       tfCtx.textContent = msg.context;
-    }
-
-    // Log entry
-    if (msg.context) {
       addContextBadge(msg.context);
     }
   }
@@ -325,7 +293,7 @@ function onTransferContext(msg) {
 function addContextBadge(ctx) {
   const el = document.createElement('div');
   el.className = 'ctx-badge';
-  el.innerHTML = `<b>🔄 전환 컨텍스트 주입됨</b>${escHtml(ctx)}`;
+  el.innerHTML = `<b>${escHtml(window.i18n.t('log.context_badge.title'))}</b>${escHtml(ctx)}`;
   insertLogEntry(el);
 }
 
@@ -364,8 +332,6 @@ function onAudioOutput(b64) {
 }
 
 // Transcript.
-let currentStreamId = null;
-
 function onTranscript(msg) {
   if (msg.role === 'user') {
     finishStreaming();
@@ -374,7 +340,6 @@ function onTranscript(msg) {
     return;
   }
 
-  // assistant delta streaming
   if (msg.delta) {
     const incomingItemId = msg.item_id || null;
     const streamChanged = incomingItemId && streamingItemId && incomingItemId !== streamingItemId;
@@ -434,20 +399,18 @@ function onAgentSwitch(msg) {
   currentAgent = msg.to;
   updateAgentCard(msg.to, msg.to_name);
 
-  // Right panel log entry
   const el = document.createElement('div');
   el.className = 'switch-card';
   el.innerHTML = `
-    <span class="agent-tag ${agentClass(msg.from)}">${agentDisplayName(msg.from)}</span>
+    <span class="agent-tag ${agentClass(msg.from)}">${escHtml(agentDisplayName(msg.from))}</span>
     <span class="sw-arrow">→</span>
-    <span class="agent-tag ${agentClass(msg.to)}">${msg.to_name || agentDisplayName(msg.to)}</span>
+    <span class="agent-tag ${agentClass(msg.to)}">${escHtml(msg.to_name || agentDisplayName(msg.to))}</span>
   `;
   insertLogEntry(el);
 
-  // Inline indicator in chat panel
   const chatEl = document.createElement('div');
   chatEl.className = 'msg msg-agent-switch';
-  chatEl.innerHTML = `<span class="agent-tag ${agentClass(msg.to)}">${msg.to_name || agentDisplayName(msg.to)}</span> 에이전트 연결`;
+  chatEl.innerHTML = `<span class="agent-tag ${agentClass(msg.to)}">${escHtml(msg.to_name || agentDisplayName(msg.to))}</span>${escHtml(window.i18n.t('agent.switch_suffix'))}`;
   messages.appendChild(chatEl);
   messages.scrollTop = messages.scrollHeight;
 }
@@ -472,31 +435,29 @@ function onToolCall(msg) {
     card.innerHTML = `
       <div class="tool-head">
         <span class="tool-name">${escHtml(msg.name)}</span>
-        <span class="tool-badge calling">호출 중...</span>
+        <span class="tool-badge calling">${escHtml(window.i18n.t('log.tool.calling'))}</span>
       </div>
       <div class="tool-body">
-        <div class="tool-lbl">Args</div>
+        <div class="tool-lbl">${escHtml(window.i18n.t('log.tool.args'))}</div>
         <div class="tool-json">${escHtml(JSON.stringify(msg.args, null, 2))}</div>
       </div>
     `;
     toolCardMap[key] = card;
     insertLogEntry(card);
 
-    // Inline indicator in chat panel
     addToolCallToChat(msg.name, msg.args);
   } else if (msg.status === 'done') {
     const card = toolCardMap[key];
     if (card) {
       const badge = card.querySelector('.tool-badge');
-      if (badge) { badge.className = 'tool-badge done'; badge.textContent = '완료'; }
+      if (badge) { badge.className = 'tool-badge done'; badge.textContent = window.i18n.t('log.tool.done'); }
       card.querySelector('.tool-body').insertAdjacentHTML('beforeend', `
-        <div class="tool-lbl">Result</div>
+        <div class="tool-lbl">${escHtml(window.i18n.t('log.tool.result'))}</div>
         <div class="tool-json">${escHtml(typeof msg.result === 'string' ? msg.result : JSON.stringify(msg.result, null, 2))}</div>
       `);
       delete toolCardMap[key];
     }
 
-    // Inline result in chat panel
     if (msg.result) {
       addToolResultToChat(msg.name, msg.result);
     }
@@ -530,7 +491,6 @@ function addToolResultToChat(name, result) {
 async function startRecording() {
   audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
 
-  // Output routing
   outputGain    = audioCtx.createGain();
   outputAnalyser = audioCtx.createAnalyser();
   outputGain.connect(audioCtx.destination);
@@ -604,7 +564,7 @@ function drawAnalyser(canvas, analyser, color) {
   ctx.stroke();
 }
 
-// Demo control panel.
+// Preset buttons.
 document.querySelectorAll('.preset-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
@@ -614,11 +574,7 @@ document.querySelectorAll('.preset-btn').forEach(btn => {
   });
 });
 
-function applyPreset(id) {
-  const scenario = WORKFLOW_SCENARIOS[id];
-  if (!scenario) return;
-
-  // Update Workflow simulation panel
+function renderWorkflowMessages(scenario) {
   workflowMessages.innerHTML = '';
   scenario.messages.forEach(m => {
     const el = document.createElement('div');
@@ -628,16 +584,21 @@ function applyPreset(id) {
   });
   workflowBadge.className = `workflow-badge ${scenario.badgeClass}`;
   workflowBadge.textContent = scenario.badgeText;
+}
 
-  // Show/hide transfer viz
+function applyPreset(id) {
+  const scenario = WORKFLOW_SCENARIOS[id];
+  if (!scenario) return;
+
+  activePresetId = id;
+  renderWorkflowMessages(scenario);
   transferViz.classList.toggle('visible', !scenario.workflow_resolved);
 
-  // Sync toggle buttons
   const presetStateMap = {
     S1: { customer_tier: 'regular', request_tone: 'normal',    order_status: 'normal',           inquiry_type: 'simple',    has_coupon: false, repeat_count: 0, seller_fault: false, order_status_history: [] },
     S2: { customer_tier: 'vip',     request_tone: 'urgent',    order_status: 'normal',           inquiry_type: 'complex',   has_coupon: true,  repeat_count: 0, seller_fault: false, order_status_history: [] },
-    S3: { customer_tier: 'regular', request_tone: 'complaint', order_status: 'delayed',          inquiry_type: 'simple',    has_coupon: false, repeat_count: 2, seller_fault: true,  order_status_history: ['배송준비', '품절취소', '재주문', '배송지연'] },
-    S4: { customer_tier: 'regular', request_tone: 'normal',    order_status: 'refund_requested', inquiry_type: 'ambiguous', has_coupon: false, repeat_count: 1, seller_fault: false, order_status_history: ['배송준비', '취소요청'] },
+    S3: { customer_tier: 'regular', request_tone: 'complaint', order_status: 'delayed',          inquiry_type: 'simple',    has_coupon: false, repeat_count: 2, seller_fault: true,  order_status_history: presetHistoryFor('S3') },
+    S4: { customer_tier: 'regular', request_tone: 'normal',    order_status: 'refund_requested', inquiry_type: 'ambiguous', has_coupon: false, repeat_count: 1, seller_fault: false, order_status_history: presetHistoryFor('S4') },
   };
   const presetState = presetStateMap[id];
   if (presetState) {
@@ -647,10 +608,11 @@ function applyPreset(id) {
     });
     demoState.workflow_resolved = scenario.workflow_resolved;
     syncToggle('workflow_resolved', scenario.workflow_resolved);
+    orderStatusHistoryInput.value = formatHistoryInput(presetState.order_status_history);
+    repeatCountInput.value = String(presetState.repeat_count);
   }
 
-  // Send to backend
-  sendWs({ type: 'demo_inject', payload: { preset: id } });
+  sendWs({ type: 'demo_inject', payload: { preset: id, locale: window.i18n.locale } });
 }
 
 function syncToggle(field, val) {
@@ -667,7 +629,6 @@ document.querySelectorAll('.toggle-btn[data-field]').forEach(btn => {
     if (val === 'true') val = true;
     else if (val === 'false') val = false;
 
-    // Single-select within same field (except boolean fields)
     if (typeof val === 'string') {
       document.querySelectorAll(`[data-field="${field}"]`).forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -680,13 +641,11 @@ document.querySelectorAll('.toggle-btn[data-field]').forEach(btn => {
   });
 });
 
-// Customer ID input
 customerIdInput.addEventListener('change', (e) => {
   demoState.customer_id = e.target.value;
   sendWs({ type: 'demo_inject', payload: { customer_id: e.target.value } });
 });
 
-// Recent order context inputs
 recentOrderIdInput.addEventListener('change', (e) => {
   demoState.recent_order_id = e.target.value;
   sendWs({ type: 'demo_inject', payload: { recent_order_id: e.target.value } });
@@ -712,7 +671,6 @@ orderStatusHistoryInput.addEventListener('change', (e) => {
   sendWs({ type: 'demo_inject', payload: { order_status_history: history } });
 });
 
-// Voice selector
 voiceSpeedRange.addEventListener('input', (e) => {
   const speed = Number(e.target.value);
   demoState.speed = speed;
@@ -726,7 +684,23 @@ btnVoiceApply.addEventListener('click', () => {
   demoState.voice = voice;
   demoState.speed = speed;
   sendWs({ type: 'demo_inject', payload: { voice, speed } });
-  addLogEntry(`<div style="font-size:11px;color:var(--muted)">음성 프리셋 적용: ${escHtml(voice)} / speed ${speed.toFixed(2)}x</div>`);
+  addLogEntry(`<div style="font-size:11px;color:var(--muted)">${escHtml(window.i18n.t('log.voice_applied', { voice, speed: speed.toFixed(2) }))}</div>`);
+});
+
+// Locale toggle.
+function syncLocaleButtons() {
+  localeButtons.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.locale === window.i18n.locale);
+  });
+}
+
+localeButtons.forEach(btn => {
+  btn.addEventListener('click', async () => {
+    if (btn.disabled) return;
+    const target = btn.dataset.locale;
+    if (target === window.i18n.locale) return;
+    await window.i18n.setLocale(target);
+  });
 });
 
 // Button handlers.
@@ -758,7 +732,6 @@ function addLogEntry(html) {
 }
 
 function insertLogEntry(el) {
-  // Insert right after the current-agent-card so new entries stay near the top.
   const anchor = currentAgentCard;
   anchor.insertAdjacentElement('afterend', el);
   logBody.scrollTop = logBody.scrollHeight;
@@ -781,15 +754,8 @@ function agentClass(agentId) {
 }
 
 function agentDisplayName(agentId) {
-  if (!agentId) return 'Root';
-  const id = agentId.toLowerCase();
-  if (id.includes('order'))        return '주문 관리';
-  if (id.includes('delivery'))     return '배송 관리';
-  if (id.includes('refund'))       return '환불/교환';
-  if (id.includes('product'))      return '상품 문의';
-  if (id.includes('membership'))   return '회원/포인트';
-  if (id.includes('afterservice')) return 'A/S 불량';
-  return '상담 안내';
+  const key = agentKey(agentId) || 'root';
+  return window.i18n.t(`agent.${key}`);
 }
 
 function arrayBufferToBase64(buffer) {
@@ -803,3 +769,28 @@ function escHtml(str) {
   if (typeof str !== 'string') str = JSON.stringify(str);
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+// i18n lifecycle hooks.
+function refreshLocaleDependentUi() {
+  WORKFLOW_SCENARIOS = buildWorkflowScenarios();
+  syncLocaleButtons();
+  demoState.locale = window.i18n.locale;
+  if (!ws) {
+    caLabel.textContent = window.i18n.t('log.current_agent.idle');
+  }
+  if (activePresetId && WORKFLOW_SCENARIOS[activePresetId]) {
+    renderWorkflowMessages(WORKFLOW_SCENARIOS[activePresetId]);
+  }
+  setStatus(currentStatus);
+}
+
+window.i18n.ready.then(() => {
+  refreshLocaleDependentUi();
+});
+
+window.i18n.onChange(() => {
+  refreshLocaleDependentUi();
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    sendWs({ type: 'demo_inject', payload: { locale: window.i18n.locale } });
+  }
+});

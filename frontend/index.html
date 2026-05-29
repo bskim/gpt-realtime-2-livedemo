@@ -14,12 +14,18 @@
 ════════════════════════════════════ -->
 <header class="header">
   <div class="header-left">
-    <div class="logo">Voice CS<span> × GPT-Realtime-2</span></div>
+    <div class="logo">
+      <span data-i18n="header.title">Voice CS</span><span class="logo-accent" data-i18n="header.title_suffix"> × GPT-Realtime-2</span>
+    </div>
   </div>
   <div class="header-right">
-    <span class="status-chip" id="statusChip">disconnected</span>
-    <button class="btn btn-connect" id="btnStart">상담 시작</button>
-    <button class="btn btn-stop"    id="btnEnd" disabled>상담 종료</button>
+    <div class="locale-toggle" role="group" aria-label="Language">
+      <button class="locale-btn" data-locale="ko">KO</button>
+      <button class="locale-btn" data-locale="en">EN</button>
+    </div>
+    <span class="status-chip" id="statusChip" data-i18n="status.disconnected">disconnected</span>
+    <button class="btn btn-connect" id="btnStart" data-i18n="header.btn_start">상담 시작</button>
+    <button class="btn btn-stop"    id="btnEnd" disabled data-i18n="header.btn_end">상담 종료</button>
   </div>
 </header>
 
@@ -30,38 +36,38 @@
 
   <!-- ── LEFT: Demo Control ── -->
   <section class="panel demo-panel">
-    <div class="panel-header">데모 제어</div>
+    <div class="panel-header" data-i18n="panel.demo">데모 제어</div>
     <div class="demo-body">
 
       <!-- Scenario presets -->
       <div class="demo-section">
-        <div class="demo-label">시나리오 프리셋</div>
+        <div class="demo-label" data-i18n="demo.scenario_presets">시나리오 프리셋</div>
         <div class="preset-grid">
           <button class="preset-btn" data-preset="S1">
-            <span class="preset-tag">S1</span>단순 FAQ
+            <span class="preset-tag">S1</span><span data-i18n="demo.preset.S1">단순 FAQ</span>
           </button>
           <button class="preset-btn" data-preset="S2">
-            <span class="preset-tag">S2</span>복합 의도
+            <span class="preset-tag">S2</span><span data-i18n="demo.preset.S2">복합 의도</span>
           </button>
           <button class="preset-btn" data-preset="S3">
-            <span class="preset-tag">S3</span>불만 고객
+            <span class="preset-tag">S3</span><span data-i18n="demo.preset.S3">불만 고객</span>
           </button>
           <button class="preset-btn" data-preset="S4">
-            <span class="preset-tag">S4</span>모호 요청
+            <span class="preset-tag">S4</span><span data-i18n="demo.preset.S4">모호 요청</span>
           </button>
         </div>
       </div>
 
       <!-- Workflow simulation -->
       <div class="demo-section">
-        <div class="demo-label">Workflow 시뮬레이션 (전환 전)</div>
+        <div class="demo-label" data-i18n="demo.workflow_sim">Workflow 시뮬레이션 (전환 전)</div>
         <div class="workflow-sim">
           <div class="workflow-sim-header">
-            Workflow 처리
-            <span class="workflow-badge ok" id="workflowBadge">처리됨</span>
+            <span data-i18n="demo.workflow_handled">Workflow 처리</span>
+            <span class="workflow-badge ok" id="workflowBadge" data-i18n="demo.workflow_badge.handled">처리됨</span>
           </div>
           <div class="workflow-messages" id="workflowMessages">
-            <div class="workflow-msg bot">안녕하세요, 무엇을 도와드릴까요?</div>
+            <div class="workflow-msg bot" data-i18n="demo.workflow_initial_greeting">안녕하세요, 무엇을 도와드릴까요?</div>
           </div>
         </div>
       </div>
@@ -69,87 +75,87 @@
       <!-- Transfer visualization -->
       <div class="transfer-viz" id="transferViz">
         <div class="workflow-sim-header">
-          자동화 미처리 → RT-2 전환
-          <span class="workflow-badge failed">Fallback</span>
+          <span data-i18n="demo.transfer_title">자동화 미처리 → RT-2 전환</span>
+          <span class="workflow-badge failed" data-i18n="demo.transfer_badge">Fallback</span>
         </div>
         <div class="transfer-flow">
-          <div class="tf-node workflow">STT + LLM + TTS (Workflow)</div>
-          <div class="tf-arrow">↓ RT-2 전환</div>
-          <div class="tf-node rt2 active" id="rt2Node">GPT-Realtime-2 E2E</div>
+          <div class="tf-node workflow" data-i18n="demo.tf_node_workflow">STT + LLM + TTS (Workflow)</div>
+          <div class="tf-arrow" data-i18n="demo.tf_arrow">↓ RT-2 전환</div>
+          <div class="tf-node rt2 active" id="rt2Node" data-i18n="demo.tf_node_rt2">GPT-Realtime-2 E2E</div>
         </div>
         <div class="tf-ctx" id="tfCtx"></div>
       </div>
 
       <!-- Manual controls -->
       <div class="demo-section">
-        <div class="demo-label">고객 등급</div>
+        <div class="demo-label" data-i18n="demo.label.customer_tier">고객 등급</div>
         <div class="toggle-row" id="tierRow">
-          <button class="toggle-btn active" data-field="customer_tier" data-val="regular">일반</button>
-          <button class="toggle-btn" data-field="customer_tier" data-val="vip">VIP</button>
+          <button class="toggle-btn active" data-field="customer_tier" data-val="regular" data-i18n="demo.toggle.tier.regular">일반</button>
+          <button class="toggle-btn" data-field="customer_tier" data-val="vip" data-i18n="demo.toggle.tier.vip">VIP</button>
         </div>
       </div>
 
       <div class="demo-section">
-        <div class="demo-label">요청 형태</div>
+        <div class="demo-label" data-i18n="demo.label.request_tone">요청 형태</div>
         <div class="toggle-row" id="toneRow">
-          <button class="toggle-btn active" data-field="request_tone" data-val="normal">일반</button>
-          <button class="toggle-btn" data-field="request_tone" data-val="urgent">긴급</button>
-          <button class="toggle-btn" data-field="request_tone" data-val="complaint">불만</button>
+          <button class="toggle-btn active" data-field="request_tone" data-val="normal" data-i18n="demo.toggle.tone.normal">일반</button>
+          <button class="toggle-btn" data-field="request_tone" data-val="urgent" data-i18n="demo.toggle.tone.urgent">긴급</button>
+          <button class="toggle-btn" data-field="request_tone" data-val="complaint" data-i18n="demo.toggle.tone.complaint">불만</button>
         </div>
       </div>
 
       <div class="demo-section">
-        <div class="demo-label">주문 상태</div>
+        <div class="demo-label" data-i18n="demo.label.order_status">주문 상태</div>
         <div class="toggle-row" id="orderRow">
-          <button class="toggle-btn active" data-field="order_status" data-val="normal">정상</button>
-          <button class="toggle-btn" data-field="order_status" data-val="delayed">지연</button>
-          <button class="toggle-btn" data-field="order_status" data-val="lost">분실</button>
-          <button class="toggle-btn" data-field="order_status" data-val="refund_requested">환불요청</button>
+          <button class="toggle-btn active" data-field="order_status" data-val="normal" data-i18n="demo.toggle.order.normal">정상</button>
+          <button class="toggle-btn" data-field="order_status" data-val="delayed" data-i18n="demo.toggle.order.delayed">지연</button>
+          <button class="toggle-btn" data-field="order_status" data-val="lost" data-i18n="demo.toggle.order.lost">분실</button>
+          <button class="toggle-btn" data-field="order_status" data-val="refund_requested" data-i18n="demo.toggle.order.refund_requested">환불요청</button>
         </div>
       </div>
 
       <div class="demo-section">
-        <div class="demo-label">문의 유형</div>
+        <div class="demo-label" data-i18n="demo.label.inquiry_type">문의 유형</div>
         <div class="toggle-row" id="inquiryRow">
-          <button class="toggle-btn active" data-field="inquiry_type" data-val="simple">단순</button>
-          <button class="toggle-btn" data-field="inquiry_type" data-val="complex">복합</button>
-          <button class="toggle-btn" data-field="inquiry_type" data-val="ambiguous">모호</button>
+          <button class="toggle-btn active" data-field="inquiry_type" data-val="simple" data-i18n="demo.toggle.inquiry.simple">단순</button>
+          <button class="toggle-btn" data-field="inquiry_type" data-val="complex" data-i18n="demo.toggle.inquiry.complex">복합</button>
+          <button class="toggle-btn" data-field="inquiry_type" data-val="ambiguous" data-i18n="demo.toggle.inquiry.ambiguous">모호</button>
         </div>
       </div>
 
       <div class="demo-section">
-        <div class="demo-label">고객 ID</div>
-        <input class="demo-input" id="customerIdInput" type="text" value="CUST-001" placeholder="고객 코드">
+        <div class="demo-label" data-i18n="demo.label.customer_id">고객 ID</div>
+        <input class="demo-input" id="customerIdInput" type="text" value="CUST-001" data-i18n-placeholder="demo.placeholder.customer_id" placeholder="고객 코드">
       </div>
 
       <div class="demo-section">
-        <div class="demo-label">최근 주문번호</div>
-        <input class="demo-input" id="recentOrderIdInput" type="text" value="ORD-20260527-1001" placeholder="주문번호">
+        <div class="demo-label" data-i18n="demo.label.recent_order_id">최근 주문번호</div>
+        <input class="demo-input" id="recentOrderIdInput" type="text" value="ORD-20260527-1001" data-i18n-placeholder="demo.placeholder.recent_order_id" placeholder="주문번호">
       </div>
 
       <div class="demo-section">
-        <div class="demo-label">최근 주문일시</div>
+        <div class="demo-label" data-i18n="demo.label.recent_order_at">최근 주문일시</div>
         <input class="demo-input" id="recentOrderAtInput" type="datetime-local" value="2026-05-25T14:20">
       </div>
 
       <div class="demo-section">
-        <div class="demo-label">반복 이슈 횟수</div>
-        <input class="demo-input" id="repeatCountInput" type="number" min="0" step="1" value="0" placeholder="예: 2">
+        <div class="demo-label" data-i18n="demo.label.repeat_count">반복 이슈 횟수</div>
+        <input class="demo-input" id="repeatCountInput" type="number" min="0" step="1" value="0" data-i18n-placeholder="demo.placeholder.repeat_count" placeholder="예: 2">
       </div>
 
       <div class="demo-section">
         <div class="toggle-row">
-          <button class="toggle-btn" data-field="seller_fault" data-val="true" id="sellerFaultBtn">판매자 책임</button>
+          <button class="toggle-btn" data-field="seller_fault" data-val="true" id="sellerFaultBtn" data-i18n="demo.toggle.seller_fault">판매자 책임</button>
         </div>
       </div>
 
       <div class="demo-section">
-        <div class="demo-label">주문 상태 이력 (쉼표 구분)</div>
-        <input class="demo-input" id="orderStatusHistoryInput" type="text" value="" placeholder="예: 배송준비, 품절취소, 재주문, 배송지연">
+        <div class="demo-label" data-i18n="demo.label.order_status_history">주문 상태 이력 (쉼표 구분)</div>
+        <input class="demo-input" id="orderStatusHistoryInput" type="text" value="" data-i18n-placeholder="demo.placeholder.order_status_history" placeholder="예: 배송준비, 품절취소, 재주문, 배송지연">
       </div>
 
       <div class="demo-section">
-        <div class="demo-label">음성 (Voice)</div>
+        <div class="demo-label" data-i18n="demo.label.voice">음성 (Voice)</div>
         <div class="voice-row">
           <select class="demo-select" id="voiceSelect">
             <option value="sage" selected>sage</option>
@@ -162,10 +168,10 @@
             <option value="cedar">cedar</option>
             <option value="marin">marin</option>
           </select>
-          <button class="btn btn-sm" id="btnVoiceApply">적용</button>
+          <button class="btn btn-sm" id="btnVoiceApply" data-i18n="demo.btn.apply">적용</button>
         </div>
         <div class="voice-speed-row">
-          <label class="voice-speed-label" for="voiceSpeedRange">Speed</label>
+          <label class="voice-speed-label" for="voiceSpeedRange" data-i18n="demo.voice.speed_label">Speed</label>
           <input id="voiceSpeedRange" class="voice-speed-range" type="range" min="0.75" max="1.25" step="0.05" value="1.05">
           <span id="voiceSpeedValue" class="voice-speed-value">1.05x</span>
         </div>
@@ -173,8 +179,8 @@
 
       <div class="demo-section">
         <div class="toggle-row">
-          <button class="toggle-btn" data-field="has_coupon" data-val="true" id="couponBtn">쿠폰 보유</button>
-          <button class="toggle-btn" data-field="workflow_resolved" data-val="false" id="workflowFailBtn">사전 Workflow 미처리</button>
+          <button class="toggle-btn" data-field="has_coupon" data-val="true" id="couponBtn" data-i18n="demo.toggle.has_coupon">쿠폰 보유</button>
+          <button class="toggle-btn" data-field="workflow_resolved" data-val="false" id="workflowFailBtn" data-i18n="demo.toggle.workflow_fail">사전 Workflow 미처리</button>
         </div>
       </div>
 
@@ -183,15 +189,15 @@
 
   <!-- ── MIDDLE: Chat + Waveform ── -->
   <section class="panel chat-panel">
-    <div class="panel-header">실시간 대화</div>
+    <div class="panel-header" data-i18n="panel.chat">실시간 대화</div>
 
     <div class="waveform-area">
       <div class="waveform-col">
-        <div class="waveform-lbl">입력 (마이크)</div>
+        <div class="waveform-lbl" data-i18n="chat.waveform_input">입력 (마이크)</div>
         <canvas class="waveform" id="canvasInput"></canvas>
       </div>
       <div class="waveform-col">
-        <div class="waveform-lbl">출력 (AI 응답)</div>
+        <div class="waveform-lbl" data-i18n="chat.waveform_output">출력 (AI 응답)</div>
         <canvas class="waveform" id="canvasOutput"></canvas>
       </div>
     </div>
@@ -200,20 +206,20 @@
       <!-- Transfer banner (shown when fallback is active) -->
       <div class="transfer-banner" id="transferBanner">
         <span class="tb-icon">🔄</span>
-        <span>사전 Workflow 미처리 — GPT-Realtime-2 E2E 세션으로 전환됨</span>
+        <span data-i18n="chat.transfer_banner">사전 Workflow 미처리 — GPT-Realtime-2 E2E 세션으로 전환됨</span>
       </div>
     </div>
   </section>
 
   <!-- ── RIGHT: Architecture / Agent / Tool Log ── -->
   <section class="panel log-panel">
-    <div class="panel-header">에이전트 / Tool 호출</div>
+    <div class="panel-header" data-i18n="panel.log">에이전트 / Tool 호출</div>
     <div class="log-body" id="logBody">
 
       <!-- Current agent -->
       <div class="current-agent-card" id="currentAgentCard">
         <span class="ca-dot" id="caDot"></span>
-        <span class="ca-label" id="caLabel">대기 중</span>
+        <span class="ca-label" id="caLabel" data-i18n="log.current_agent.idle">대기 중</span>
         <span class="ca-sub" id="caSub"></span>
       </div>
 
@@ -224,6 +230,7 @@
 
 </main>
 
+<script src="i18n.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
