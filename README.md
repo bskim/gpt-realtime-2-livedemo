@@ -50,6 +50,12 @@ Windows/Linux/macOS 동시 지원을 위해 sh(bash)와 pwsh(PowerShell) hook을
 >   ```
 >
 > 백엔드는 시작 시 `backend/.env` 값을 OS 환경변수보다 우선 적용합니다(`load_dotenv(override=True)`).
+>
+> **자가진단 도구**
+>
+> - 시작 시 `AZURE_OPENAI_DEPLOYMENT` 가 `realtime` 을 포함하지 않거나, endpoint 형식이 Azure OpenAI 가 아니면 백엔드가 **즉시 종료(fail-fast)** 됩니다. 잘못된 리소스로 조용히 붙는 사고를 차단합니다.
+> - 실행 중에는 `http://localhost:8000/health` 로 마스킹된 endpoint / 사용 중인 deployment / `.env` 경로를 확인할 수 있습니다. 브라우저로 한 번만 열어보면 환경 진단 끝.
+> - `write_env.ps1` / `write_env.sh` 는 `azd env` 에 값이 비어 있으면 빈 `.env` 를 쓰지 않고 에러로 중단합니다.
 
 #### 실행
 

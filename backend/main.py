@@ -27,23 +27,63 @@ load_dotenv(_BACKEND_ENV, override=True)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+_ep = os.environ.get("AZURE_OPENAI_ENDPOINT", "").strip()
+_dep = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "").strip()
+
+# 설정 검증 — 조용한 오동작(예: 이웃 프로젝트의 전역 env 가 새어들어온 경우)을 시작 시점에 fail-fast 로 차단한다.
+_config_errors: list[str] = []
 if not _BACKEND_ENV.exists():
-    logger.warning(
-        "backend/.env 가 없습니다. azd 의 postprovision hook 이 실패했을 수 있습니다. "
+    _config_errors.append(
+        "backend/.env 가 존재하지 않습니다. azd 의 postprovision hook 이 실패했을 수 있습니다. "
         "scripts/write_env.ps1 또는 scripts/write_env.sh 를 수동 실행하거나 backend/.env 를 직접 작성하세요."
     )
-_ep = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
-_dep = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "")
-if _ep and "cognitiveservices.azure.com" not in _ep and "openai.azure.com" not in _ep:
-    logger.warning("AZURE_OPENAI_ENDPOINT 값이 Azure OpenAI 형식이 아닙니다: %s", _ep)
-if _dep and "realtime" not in _dep.lower():
-    logger.warning(
-        "AZURE_OPENAI_DEPLOYMENT='%s' 가 realtime 배포가 아닐 수 있습니다. "
-        "이 데모는 'gpt-realtime-2' 배포를 기대합니다.",
-        _dep,
+if not _ep:
+    _config_errors.append("AZURE_OPENAI_ENDPOINT 가 비어 있습니다.")
+elif "cognitiveservices.azure.com" not in _ep and "openai.azure.com" not in _ep:
+    _config_errors.append(f"AZURE_OPENAI_ENDPOINT 값이 Azure OpenAI 형식이 아닙니다: {_ep}")
+if not _dep:
+    _config_errors.append("AZURE_OPENAI_DEPLOYMENT 이 비어 있습니다.")
+elif "realtime" not in _dep.lower():
+    _config_errors.append(
+        f"AZURE_OPENAI_DEPLOYMENT='{_dep}' 은 realtime 배포가 아닙니다. 이 데모는 'gpt-realtime-2' 배포가 필요합니다. "
+        "시스템 전역 환경변수(예: 다른 프로젝트의 azd env)가 새어들어온 것일 수 있습니다. backend/.env 를 확인하세요."
     )
 
+if _config_errors:
+    for _msg in _config_errors:
+        logger.error("[config] %s", _msg)
+    raise SystemExit(
+        "[config] 환경 설정 오류로 서버를 시작할 수 없습니다. 위 로그를 확인하고 backend/.env 를 바로잡으세요."
+    )
+
+
+def _mask_endpoint(value: str) -> str:
+    if not value:
+        return ""
+    try:
+        scheme, rest = value.split("://", 1)
+        host = rest.split("/", 1)[0]
+        if len(host) <= 6:
+            masked_host = "*" * len(host)
+        else:
+            masked_host = host[:3] + "***" + host[-3:]
+        return f"{scheme}://{masked_host}"
+    except ValueError:
+        return "***"
+
+
 app = FastAPI(title="GPT-Realtime-2 Voice CS Demo")
+
+
+@app.get("/health")
+async def health() -> dict:
+    """마스킹된 설정 요약. 브라우저로서 백엔드가 어떤 리소스에 붙을지 1초만에 진단한다."""
+    return {
+        "status": "ok",
+        "endpoint": _mask_endpoint(_ep),
+        "deployment": _dep,
+        "env_file": str(_BACKEND_ENV) if _BACKEND_ENV.exists() else None,
+    }
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 ALLOWED_VOICES = {
