@@ -13,7 +13,7 @@ hooks:
       interactive: false
       continueOnError: true
     - shell: pwsh
-      run: scripts/load_python_env.ps1
+      run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/load_python_env.ps1
       interactive: false
       continueOnError: true
 
@@ -23,6 +23,6 @@ hooks:
       interactive: false
       continueOnError: true
     - shell: pwsh
-      run: scripts/write_env.ps1
+      run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/write_env.ps1
       interactive: false
       continueOnError: true

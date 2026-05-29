@@ -87,14 +87,25 @@ class RealtimeEventHandler:
 class RealtimeAPI(RealtimeEventHandler):
     def __init__(self):
         super().__init__()
-        endpoint = os.environ["AZURE_OPENAI_ENDPOINT"].rstrip("/")
+        endpoint = os.environ["AZURE_OPENAI_ENDPOINT"].strip().rstrip("/")
+        # Portal/azd 출력에 따라 endpoint 끝에 /openai/v1, /openai 가 붙어 오는 경우가 있어 정규화한다.
+        # 정규화하지 않으면 아래 ws_url 조립에서 /openai/v1/openai/v1/realtime 처럼 경로가 중복되어 404가 난다.
+        for suffix in ("/openai/v1", "/openai"):
+            if endpoint.lower().endswith(suffix):
+                endpoint = endpoint[: -len(suffix)].rstrip("/")
         # Support both https:// and already-wss:// endpoints
         self.url = endpoint.replace("https://", "wss://").replace("http://", "ws://")
         self.credentials = DefaultAzureCredential()
         self.acquire_token = get_bearer_token_provider(
             self.credentials, "https://cognitiveservices.azure.com/.default"
         )
-        self.azure_deployment = os.environ["AZURE_OPENAI_DEPLOYMENT"]
+        self.azure_deployment = os.environ["AZURE_OPENAI_DEPLOYMENT"].strip()
+        if "realtime" not in self.azure_deployment.lower():
+            logger.warning(
+                "AZURE_OPENAI_DEPLOYMENT='%s' 는 realtime 모델 배포명이 아닐 수 있습니다. "
+                "이 데모는 gpt-realtime-2 배포가 필요합니다.",
+                self.azure_deployment,
+            )
         self.ws = None
 
     def is_connected(self) -> bool:

@@ -22,7 +22,7 @@
 | PowerShell (pwsh) | 기본 내장 | — | — |
 | bash | — | 기본 내장 | 기본 내장 |
 
-> **Windows**: PowerShell hook(`scripts/load_python_env.ps1`)이 자동 실행됩니다.  
+> **Windows**: PowerShell hook(`scripts/load_python_env.ps1`)이 자동 실행됩니다. `azd` 가 `pwsh -NoProfile -ExecutionPolicy Bypass` 로 호출하므로 PowerShell 실행 정책 설정 없이 동작합니다.  
 > **Linux/macOS**: bash hook(`scripts/load_python_env.sh`)이 자동 실행됩니다.  
 > 두 hook 모두 등록되어 있으며 해당 OS에서 동작하는 쪽만 실행됩니다.
 
@@ -33,6 +33,23 @@ WARNING: 'preprovision' hook failed ...: 'bash' is not recognized as an internal
 ```
 
 Windows/Linux/macOS 동시 지원을 위해 sh(bash)와 pwsh(PowerShell) hook을 함께 등록했습니다. Windows에서는 bash hook이 실패하고 PowerShell hook이 성공하며, Linux/macOS에서는 반대로 동작합니다.
+
+> **중요**: `azd up` 도중 PowerShell hook이 빨간색으로 실패하면 `backend/.env` 가 만들어지지 않습니다. 이 경우 백엔드가 시스템 전역 환경변수(`AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`)를 그대로 사용해 **다른 리소스로 접속하며 404가 발생**할 수 있습니다.
+>
+> 복구는 Bicep 배포가 성공했는지에 따라 다릅니다.
+>
+> - **Bicep 배포는 성공, postprovision hook만 실패한 경우** — `azd` 가 Bicep outputs 를 이미 `.azure/<env-name>/.env` 에 저장해 두었으므로 아래 한 줄로 복구됩니다.
+>   ```powershell
+>   pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\write_env.ps1
+>   ```
+>   (`azd env get-value AZURE_OPENAI_ENDPOINT` 가 값을 반환하면 이 경우)
+> - **Bicep 배포도 실패한 경우** — `.azure/<env-name>/.env` 가 비어 있어 위 스크립트가 빈 값을 씁니다. `azd provision` 을 다시 실행하거나, 포털에서 endpoint/deployment 를 확인해 `backend/.env` 를 직접 작성하세요.
+>   ```ini
+>   AZURE_OPENAI_ENDPOINT=https://<your-aiservices>.cognitiveservices.azure.com/
+>   AZURE_OPENAI_DEPLOYMENT=gpt-realtime-2
+>   ```
+>
+> 백엔드는 시작 시 `backend/.env` 값을 OS 환경변수보다 우선 적용합니다(`load_dotenv(override=True)`).
 
 #### 실행
 
@@ -74,11 +91,25 @@ azd up
 
 #### Windows
 
+권장(실행 정책에 영향받지 않음):
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File scripts\run_backend.ps1
+```
+
+또는 venv를 활성화해서 실행:
+
 ```powershell
 cd backend
 .venv\Scripts\activate
 uvicorn main:app --reload --port 8000
 ```
+
+> `.venv\Scripts\activate` 실행 시 `... 이 시스템에서 스크립트를 실행할 수 없으므로 ...` 오류가 나면 PowerShell 실행 정책이 막혀 있는 것입니다. 다음 중 하나로 해결합니다.
+>
+> - 위의 `scripts\run_backend.ps1` 사용 (정책 영향 없음)
+> - 현재 사용자에게만 정책 완화: `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`
+> - cmd 사용: `backend\.venv\Scripts\activate.bat`
 
 #### Linux / macOS
 

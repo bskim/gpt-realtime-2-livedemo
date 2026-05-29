@@ -20,9 +20,28 @@ from agents.technical import afterservice_assistant
 from assistant_service import AssistantService
 from realtime_client import RealtimeClient
 
-load_dotenv()
+# backend/.env 값을 OS 전역 환경변수보다 우선시킨다.
+# 다른 azd 프로젝트의 전역 env(예: 다른 모델/엔드포인트)가 남아 있어도 이 데모는 .env 를 따른다.
+_BACKEND_ENV = Path(__file__).parent / ".env"
+load_dotenv(_BACKEND_ENV, override=True)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+if not _BACKEND_ENV.exists():
+    logger.warning(
+        "backend/.env 가 없습니다. azd 의 postprovision hook 이 실패했을 수 있습니다. "
+        "scripts/write_env.ps1 또는 scripts/write_env.sh 를 수동 실행하거나 backend/.env 를 직접 작성하세요."
+    )
+_ep = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
+_dep = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "")
+if _ep and "cognitiveservices.azure.com" not in _ep and "openai.azure.com" not in _ep:
+    logger.warning("AZURE_OPENAI_ENDPOINT 값이 Azure OpenAI 형식이 아닙니다: %s", _ep)
+if _dep and "realtime" not in _dep.lower():
+    logger.warning(
+        "AZURE_OPENAI_DEPLOYMENT='%s' 가 realtime 배포가 아닐 수 있습니다. "
+        "이 데모는 'gpt-realtime-2' 배포를 기대합니다.",
+        _dep,
+    )
 
 app = FastAPI(title="GPT-Realtime-2 Voice CS Demo")
 
