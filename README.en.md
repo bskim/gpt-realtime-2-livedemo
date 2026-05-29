@@ -12,7 +12,7 @@ A hybrid customer-service architecture live demo: a conventional STT+LLM+TTS wor
 
 The recommended flow is to deploy and run first, then read the architecture and scenario sections below.
 
-### Option A: `azd up` (recommended — automated)
+### `azd up` (recommended — automated)
 
 #### Prerequisites
 
